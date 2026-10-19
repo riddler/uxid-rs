@@ -1,0 +1,62 @@
+# mise config for uxid-rs: the toolchain and the gate tasks.
+#
+#   mise install          provision the toolchain below
+#   mise run gate:loop    inner loop: fmt, clippy, test
+#   mise run gate         full gate, the advancement gate
+#
+# The Rust toolchain is pinned to one stable release; the crate itself
+# declares `rust-version = "1.85"` in Cargo.toml, the oldest Rust it
+# supports, while the toolchain that builds and gates it is this one.
+# `llvm-tools` is the rustup component cargo-llvm-cov needs.
+
+[tools]
+rust = { version = "1.99.1", profile = "minimal", components = "rustfmt,clippy,llvm-tools" }
+"aqua:taiki-e/cargo-llvm-cov" = "0.8.7"
+"aqua:EmbarkStudios/cargo-deny" = "0.19.8"
+
+[tasks."gate:fmt"]
+description = "Check formatting"
+run = "cargo fmt --all -- --check"
+
+[tasks."gate:clippy"]
+description = "Lint every target with every feature, warnings denied"
+run = "cargo clippy --all-targets --all-features -- -D warnings"
+
+[tasks."gate:test"]
+description = "Test with every feature, then with no default features"
+run = [
+  "cargo test --all-features",
+  "cargo test --no-default-features",
+]
+
+[tasks."gate:doc"]
+description = "Build the docs with rustdoc warnings denied"
+env = { RUSTDOCFLAGS = "-D warnings" }
+run = "cargo doc --no-deps --all-features"
+
+[tasks."gate:coverage"]
+description = "Line coverage with every feature, failing under 90 percent"
+run = "cargo llvm-cov --all-features --fail-under-lines 90"
+
+[tasks."gate:deny"]
+description = "Advisories, licenses, bans and sources"
+run = "cargo deny check"
+
+[tasks."gate:loop"]
+description = "Inner loop: fmt, clippy, test"
+run = [
+  { task = "gate:fmt" },
+  { task = "gate:clippy" },
+  { task = "gate:test" },
+]
+
+[tasks.gate]
+description = "Full gate"
+run = [
+  { task = "gate:fmt" },
+  { task = "gate:clippy" },
+  { task = "gate:test" },
+  { task = "gate:doc" },
+  { task = "gate:coverage" },
+  { task = "gate:deny" },
+]

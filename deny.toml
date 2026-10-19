@@ -1,0 +1,30 @@
+# cargo-deny configuration, read by `cargo deny check` in the full gate.
+#
+# Every crate in the dependency graph, for every target, is checked:
+# advisories from the RustSec database, licenses against the list below,
+# duplicate versions, and the registry each crate comes from.
+
+[graph]
+all-features = true
+
+[advisories]
+# Every vulnerability, unmaintained and unsound advisory, and every yanked
+# version, is an error.
+unmaintained = "all"
+yanked = "deny"
+
+[licenses]
+# The licenses the dependency graph needs. A crate under any other license
+# fails the check until this list is widened on purpose.
+allow = ["MIT", "Apache-2.0"]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
