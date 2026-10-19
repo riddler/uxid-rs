@@ -2,32 +2,26 @@
 name = "uxid"
 version = "0.0.1"
 authors = ["JohnnyT <ubergeek3141@gmail.com>"]
-edition = "2018"
-
+edition = "2024"
+rust-version = "1.85"
 license = "MIT"
-readme = "../../README.md"
+repository = "https://github.com/riddler/uxid-rs"
+readme = "README.md"
+description = "Prefixed, K-sortable identifiers a person can read, wire-compatible with the Elixir uxid package."
+keywords = ["uxid", "id", "identifier", "sortable", "no_std"]
+categories = ["encoding", "no-std"]
+include = ["/src/", "/Cargo.toml", "/README.md", "/LICENSE", "/CHANGELOG.md"]
 
-description = "User eXperience based IDentifiers"
-keywords = ["uxid", "sortable", "identifier"]
-
-repository = "https://github.com/riddler/uxid"
+[features]
+default = ["std", "getrandom"]
+std = []
+getrandom = ["dep:getrandom"]
+serde = ["dep:serde"]
 
 [dependencies]
-lazy_static = "1.2"
-serde = { version = "1.0", features = ["derive"], optional = true }
-chrono = "0.4"
-rand = "0.6"
-
-[dev-dependencies]
-bencher = "0.1"
-
-[[bench]]
-name = "bench"
-path = "benches/bench.rs"
-harness = false
-
-[workspace]
-members = ["cli"]
+getrandom = { version = "0.4", optional = true }
+serde = { version = "1", default-features = false, optional = true }
+sha2 = { version = "0.11", default-features = false }
 
 [package.metadata.docs.rs]
 all-features = true
