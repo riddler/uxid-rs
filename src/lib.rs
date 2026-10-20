@@ -8,6 +8,11 @@
 //! (`Z` in upper case) and characters of a SHA-256 hash of the prefix and that string, so the same
 //! inputs always give the same id.
 //!
+//! [`decode_with`] reads an id back to a [`Decoded`] (its prefix, size, time
+//! form, whether it is deterministic, and its time), or refuses it with the
+//! wire format's reason; it never panics on malformed input. [`is_valid`]
+//! and [`is_deterministic`] answer the two common questions about a string.
+//!
 //! ```
 //! use uxid::{Options, Size};
 //!
@@ -20,14 +25,20 @@
 //!
 //! let named = uxid::generate(&Options::new().prefix("usr").from("alice@example.com"))?;
 //! assert_eq!(named, "usr_zcvt7epac0t1ebcsjfyf7cwz25");
+//! assert!(uxid::is_deterministic(&named));
 //! # }
+//!
+//! let decoded = uxid::decode_with("cus_01hf7yat0004h1", "_", 0)?;
+//! assert_eq!(decoded.time(), Some(1_700_000_000_000));
+//! assert_eq!(uxid::decode_with("cus_", "_", 0), Err(uxid::Error::Empty));
 //! # Ok::<(), uxid::Error>(())
 //! ```
 //!
 //! # Features
 //!
 //! - `std` (default): `now_millis`, the system clock in milliseconds since
-//!   the Unix epoch.
+//!   the Unix epoch, and `decode`, which is [`decode_with`] with the
+//!   delimiter `_` and that clock.
 //! - `getrandom` (default): `GetrandomSource`, the platform's secure byte
 //!   source.
 //! - `std` and `getrandom` together: `generate`, which is
@@ -35,9 +46,10 @@
 //! - `serde`: declared for later use; it derives nothing yet.
 //!
 //! With no feature the crate is `no_std` with `alloc`: [`generate_with`],
-//! [`Options`], [`ByteSource`] and [`Error`] are all present, and the
-//! caller supplies the byte source and the time (a deterministic id reads
-//! neither).
+//! [`decode_with`], [`is_valid`], [`is_deterministic`], [`Options`],
+//! [`Decoded`], [`ByteSource`] and [`Error`] are all present, and the caller
+//! supplies the byte source and the time (a deterministic id reads neither,
+//! and a decode reads the time only for a compact body).
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -50,6 +62,7 @@ extern crate std;
 mod base32;
 #[cfg(feature = "std")]
 mod clock;
+mod decode;
 mod deterministic;
 mod error;
 mod generate;
@@ -58,6 +71,9 @@ mod source;
 
 #[cfg(feature = "std")]
 pub use clock::now_millis;
+#[cfg(feature = "std")]
+pub use decode::decode;
+pub use decode::{Decoded, decode_with, is_deterministic, is_valid};
 pub use error::Error;
 #[cfg(all(feature = "std", feature = "getrandom"))]
 pub use generate::generate;
