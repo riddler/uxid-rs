@@ -30,8 +30,25 @@ pub enum Error {
     /// ([`Options::from`](crate::Options::from)), which has no random field.
     /// The code is `rand_with_from`, a corpus name.
     RandWithFrom,
-    /// A time above 2^48 - 1 milliseconds, the latest a time field holds, or
-    /// a system clock reading before the Unix epoch. The code is
+    /// A deterministic body ([`Options::from`](crate::Options::from)) asked
+    /// for with a [`Monotonic`](crate::Monotonic) generator: a deterministic
+    /// id has no random field to step. The code is `from_with_monotonic`, a
+    /// corpus name.
+    FromWithMonotonic,
+    /// Fixed random bytes ([`Options::rand`](crate::Options::rand)) asked
+    /// for with a [`Monotonic`](crate::Monotonic) generator, which chooses
+    /// the random field itself. The code is `rand_with_monotonic`, a corpus
+    /// name.
+    RandWithMonotonic,
+    /// A [`Monotonic`](crate::Monotonic) generator asked for with a random
+    /// width of 0 bytes (a standard `xs`, or an explicit `rand_size` of 0),
+    /// which leaves no random field to step. The code is
+    /// `empty_rand_with_monotonic`, this crate's own: the wire format's
+    /// generation errors name no such refusal.
+    EmptyRandWithMonotonic,
+    /// A time above 2^48 - 1 milliseconds, the latest a time field holds, a
+    /// monotonic step that would carry the time past it, or a system clock
+    /// reading before the Unix epoch. The code is
     /// `time_out_of_range`.
     TimeOutOfRange,
     /// An empty delimiter; the delimiter is a non-empty string. The code is
@@ -68,6 +85,9 @@ impl Error {
             Self::RandWidthMismatch => "rand_width_mismatch",
             Self::RandSizeTooLarge => "rand_size_too_large",
             Self::RandWithFrom => "rand_with_from",
+            Self::FromWithMonotonic => "from_with_monotonic",
+            Self::RandWithMonotonic => "rand_with_monotonic",
+            Self::EmptyRandWithMonotonic => "empty_rand_with_monotonic",
             Self::TimeOutOfRange => "time_out_of_range",
             Self::EmptyDelimiter => "empty_delimiter",
             Self::UnknownSize => "unknown_size",
@@ -91,6 +111,15 @@ impl fmt::Display for Error {
             Self::RandSizeTooLarge => "the random width is above 10 bytes",
             Self::RandWithFrom => {
                 "fixed random bytes cannot be used with from: a deterministic id has no random field"
+            }
+            Self::FromWithMonotonic => {
+                "from cannot be used with a monotonic generator: a deterministic id has no random field to step"
+            }
+            Self::RandWithMonotonic => {
+                "fixed random bytes cannot be used with a monotonic generator: it chooses the random field"
+            }
+            Self::EmptyRandWithMonotonic => {
+                "a monotonic generator needs a random field, but this random width is 0 bytes"
             }
             Self::TimeOutOfRange => {
                 "the time is outside 0 to 2^48 - 1 milliseconds since the Unix epoch"

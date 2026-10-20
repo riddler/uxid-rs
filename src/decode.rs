@@ -83,7 +83,7 @@ impl Decoded {
 ///
 /// This form needs no feature: it reads no clock, so it builds under
 /// `no_std`. `decode`, behind the `std` feature, is this function with the
-/// delimiter `_` and [`now_millis`](crate::now_millis).
+/// delimiter `_` and `now_millis`.
 ///
 /// The body is everything after the last delimiter found reading left to
 /// right, and the prefix everything before it; a string with no delimiter is

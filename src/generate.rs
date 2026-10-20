@@ -8,11 +8,11 @@ use crate::deterministic;
 use crate::{ByteSource, Error, Options};
 
 /// The latest time a time field holds: 2^48 - 1 milliseconds.
-const MAX_TIME: u64 = (1 << 48) - 1;
+pub(crate) const MAX_TIME: u64 = (1 << 48) - 1;
 /// The widest random field at any size, in bytes.
-const MAX_RAND_BYTES: usize = 10;
+pub(crate) const MAX_RAND_BYTES: usize = 10;
 /// The deterministic marker's value, which a compact time may not start with.
-const MARKER: u64 = 31;
+pub(crate) const MARKER: u64 = 31;
 
 /// Generates a time-based id from `options`, taking random bytes from
 /// `source` and the time from `now` (milliseconds since the Unix epoch) when
@@ -112,7 +112,7 @@ where
 }
 
 /// Appends the prefix and the delimiter, or nothing for no prefix.
-fn push_prefix(id: &mut String, prefix: &str, delimiter: &str) {
+pub(crate) fn push_prefix(id: &mut String, prefix: &str, delimiter: &str) {
     if !prefix.is_empty() {
         id.push_str(prefix);
         id.push_str(delimiter);
