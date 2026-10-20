@@ -1,6 +1,8 @@
 //! Where random bytes come from: the [`ByteSource`] trait and, behind the
 //! `getrandom` feature, [`GetrandomSource`], the platform's secure source.
 
+use alloc::boxed::Box;
+
 use crate::Error;
 
 /// A source of random bytes for an id's random field.
@@ -11,7 +13,8 @@ use crate::Error;
 /// [`Options::rand`](crate::Options::rand).
 ///
 /// A source for real ids must be cryptographically secure: the random field
-/// is what makes an id hard to guess. [`GetrandomSource`] is the platform's.
+/// is what makes an id hard to guess. `GetrandomSource`, behind the
+/// `getrandom` feature, is the platform's.
 /// A deterministic source belongs in tests only.
 ///
 /// ```
@@ -42,9 +45,25 @@ pub trait ByteSource {
     fn fill(&mut self, buf: &mut [u8]) -> Result<(), Error>;
 }
 
+/// A mutable reference to a source is a source: it fills from the source it
+/// points at.
+impl<T: ByteSource + ?Sized> ByteSource for &mut T {
+    fn fill(&mut self, buf: &mut [u8]) -> Result<(), Error> {
+        (**self).fill(buf)
+    }
+}
+
+/// A boxed source is a source, so a `Box<dyn ByteSource>` can be chosen at run
+/// time.
+impl<T: ByteSource + ?Sized> ByteSource for Box<T> {
+    fn fill(&mut self, buf: &mut [u8]) -> Result<(), Error> {
+        (**self).fill(buf)
+    }
+}
+
 /// The platform's cryptographically secure random source, through the
-/// [`getrandom`](https://docs.rs/getrandom) crate; the source
-/// [`generate`](crate::generate) uses. Behind the `getrandom` feature.
+/// [`getrandom`](https://docs.rs/getrandom) crate; the source `generate`
+/// uses. Behind the `getrandom` feature.
 ///
 /// ```
 /// use uxid::{ByteSource, GetrandomSource};

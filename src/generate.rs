@@ -18,8 +18,8 @@ const MARKER: u64 = 31;
 /// the options set none.
 ///
 /// This form needs no feature: it reads no clock and no platform source, so
-/// it builds under `no_std`. [`generate`](crate::generate) is this function
-/// with the platform source and the system clock.
+/// it builds under `no_std`. `generate`, behind the `std` and `getrandom`
+/// features, is this function with the platform source and the system clock.
 ///
 /// ```
 /// use uxid::{Error, Options, Size, generate_with};
@@ -103,8 +103,8 @@ where
 
 /// Generates a time-based id from `options`, with random bytes from the
 /// platform's secure source ([`GetrandomSource`](crate::GetrandomSource))
-/// and the time from the system clock when the options set none. Behind the
-/// `std` and `getrandom` features, both on by default.
+/// and the time from [`now_millis`](crate::now_millis) when the options set
+/// none. Behind the `std` and `getrandom` features, both on by default.
 ///
 /// ```
 /// use uxid::{Options, Size};
@@ -123,16 +123,7 @@ where
 pub fn generate(options: &Options<'_>) -> Result<String, Error> {
     let now = match options.time {
         Some(_) => 0,
-        None => system_now()?,
+        None => crate::now_millis()?,
     };
     generate_with(options, &mut crate::GetrandomSource, now)
-}
-
-/// The system clock in milliseconds since the Unix epoch.
-#[cfg(all(feature = "std", feature = "getrandom"))]
-fn system_now() -> Result<u64, Error> {
-    let elapsed = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|_| Error::TimeOutOfRange)?;
-    u64::try_from(elapsed.as_millis()).map_err(|_| Error::TimeOutOfRange)
 }

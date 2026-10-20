@@ -20,12 +20,17 @@
 //!
 //! # Features
 //!
-//! - `std` (default): the system clock, which [`generate`] reads.
-//! - `getrandom` (default): [`GetrandomSource`], the platform's secure byte
-//!   source, which [`generate`] draws from.
+//! - `std` (default): `now_millis`, the system clock in milliseconds since
+//!   the Unix epoch.
+//! - `getrandom` (default): `GetrandomSource`, the platform's secure byte
+//!   source.
+//! - `std` and `getrandom` together: `generate`, which is
+//!   [`generate_with`] with `GetrandomSource` and `now_millis`.
+//! - `serde`: declared for later use; it derives nothing yet.
 //!
-//! Without them the crate is `no_std` with `alloc`, and [`generate_with`]
-//! takes the byte source and the time from the caller.
+//! With no feature the crate is `no_std` with `alloc`: [`generate_with`],
+//! [`Options`], [`ByteSource`] and [`Error`] are all present, and the
+//! caller supplies the byte source and the time.
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -36,11 +41,15 @@ extern crate alloc;
 extern crate std;
 
 mod base32;
+#[cfg(feature = "std")]
+mod clock;
 mod error;
 mod generate;
 mod options;
 mod source;
 
+#[cfg(feature = "std")]
+pub use clock::now_millis;
 pub use error::Error;
 #[cfg(all(feature = "std", feature = "getrandom"))]
 pub use generate::generate;

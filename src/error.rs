@@ -12,7 +12,7 @@ use core::fmt;
 ///
 /// The enum is `#[non_exhaustive]`: later versions add variants (decoding
 /// refusals among them), so a `match` on it needs a wildcard arm.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
     /// A compact time whose first character would be the deterministic
