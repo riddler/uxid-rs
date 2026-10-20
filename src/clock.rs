@@ -3,7 +3,8 @@
 use crate::Error;
 
 /// The system clock, in milliseconds since the Unix epoch: the time
-/// `generate` uses when the options set none. Behind the `std` feature.
+/// `generate` uses when the options set none, and the clock `decode` reads a
+/// compact time against. Behind the `std` feature.
 ///
 /// Pass it as `now` to [`generate_with`](crate::generate_with) to pair the
 /// system clock with a byte source of your own.
