@@ -136,16 +136,18 @@ checks; it is `no_std`-capable with `alloc`, takes its random bytes from the
 platform CSPRNG through `getrandom` by default, and builds on Rust 1.85 or
 later. The 2020 code on `main` (a binary with no library, its `Cargo.toml`,
 `Cargo.lock` and the files beside them) is being replaced by that rewrite.
-The library, the gate tasks, CI and the vendored corpus arrive with later
-changes; until they do, the sentences in this file about the 1.0.0 crate, its
-corpus, its gate and its workflows describe the target, not the current tree.
+The library, its gate tasks and the vendored conformance corpus are on
+`main`; CI and the release workflow arrive with later changes, and until they
+do, the sentences in this file about them describe the target, not the
+current tree.
 
 - **The crate is `uxid`.** Version 1.0.0 replaces the 2020 0.0.1 placeholder
   on crates.io under the same crate name: a new crate in substance, not an
   upgrade path from 0.0.1.
-- **The corpus is the arbiter.** `conformance/` will hold the corpus
+- **The corpus is the arbiter.** `conformance/` holds the corpus
   vendored from uxid-ex at a release tag, its tag, commit and hash recorded in
-  `conformance/SOURCE.json`. The vendored files are never edited, and every
+  `conformance/SOURCE.json`; `tests/corpus.rs` runs every case and
+  `tests/corpus_hash.rs` checks the hash. The vendored files are never edited, and every
   case passes with no skip list: a case this port cannot pass is reported
   against uxid-ex with its evidence, never skipped or worked round here. An
   answer the corpus does not fix follows uxid-ex's spec at that tag.
