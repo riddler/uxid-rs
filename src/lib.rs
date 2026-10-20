@@ -3,7 +3,10 @@
 //!
 //! An id is an optional prefix, a delimiter and a body: a 48-bit millisecond
 //! time (or a compact 40-bit one) followed by a random field, in Crockford
-//! Base32, as uxid-ex's wire-format guide lays it out.
+//! Base32, as uxid-ex's wire-format guide lays it out. Given
+//! [`Options::from`], the body is deterministic instead: the marker `z`
+//! (`Z` in upper case) and characters of a SHA-256 hash of the prefix and that string, so the same
+//! inputs always give the same id.
 //!
 //! ```
 //! use uxid::{Options, Size};
@@ -14,6 +17,9 @@
 //!
 //! let short = uxid::generate(&Options::new().prefix("cus").size(Size::S))?;
 //! assert_eq!(short.len(), "cus_".len() + 14);
+//!
+//! let named = uxid::generate(&Options::new().prefix("usr").from("alice@example.com"))?;
+//! assert_eq!(named, "usr_zcvt7epac0t1ebcsjfyf7cwz25");
 //! # }
 //! # Ok::<(), uxid::Error>(())
 //! ```
@@ -30,7 +36,8 @@
 //!
 //! With no feature the crate is `no_std` with `alloc`: [`generate_with`],
 //! [`Options`], [`ByteSource`] and [`Error`] are all present, and the
-//! caller supplies the byte source and the time.
+//! caller supplies the byte source and the time (a deterministic id reads
+//! neither).
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -43,6 +50,7 @@ extern crate std;
 mod base32;
 #[cfg(feature = "std")]
 mod clock;
+mod deterministic;
 mod error;
 mod generate;
 mod options;

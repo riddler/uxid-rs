@@ -10,7 +10,8 @@ use crate::Error;
 /// [`generate_with`](crate::generate_with) calls [`fill`](ByteSource::fill)
 /// at most once per id, with a buffer exactly the random width of the
 /// request, and never when the random field is empty or fixed by
-/// [`Options::rand`](crate::Options::rand).
+/// [`Options::rand`](crate::Options::rand), or when the id is deterministic
+/// ([`Options::from`](crate::Options::from)).
 ///
 /// A source for real ids must be cryptographically secure: the random field
 /// is what makes an id hard to guess. `GetrandomSource`, behind the
