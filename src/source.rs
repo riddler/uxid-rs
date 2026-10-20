@@ -43,6 +43,23 @@ pub trait ByteSource {
     ///
     /// A source that cannot supply the bytes returns an error, usually
     /// [`Error::ByteSource`]; generation returns it unchanged.
+    ///
+    /// ```
+    /// use uxid::{ByteSource, Error};
+    ///
+    /// fn draw(source: &mut impl ByteSource) -> Result<[u8; 4], Error> {
+    ///     let mut buf = [0u8; 4];
+    ///     source.fill(&mut buf)?;
+    ///     Ok(buf)
+    /// }
+    ///
+    /// # struct Repeat(u8);
+    /// # impl ByteSource for Repeat {
+    /// #     fn fill(&mut self, buf: &mut [u8]) -> Result<(), Error> { buf.fill(self.0); Ok(()) }
+    /// # }
+    /// assert_eq!(draw(&mut Repeat(7))?, [7, 7, 7, 7]);
+    /// # Ok::<(), Error>(())
+    /// ```
     fn fill(&mut self, buf: &mut [u8]) -> Result<(), Error>;
 }
 

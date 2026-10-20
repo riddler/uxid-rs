@@ -13,6 +13,22 @@ use core::fmt;
 ///
 /// The enum is `#[non_exhaustive]`: later versions add variants, so a
 /// `match` on it needs a wildcard arm.
+///
+/// ```
+/// use uxid::{Error, Options, generate_with};
+///
+/// # struct NoSource;
+/// # impl uxid::ByteSource for NoSource {
+/// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), Error> { unreachable!() }
+/// # }
+/// let refused = generate_with(&Options::new().rand_size(11), &mut NoSource, 0).unwrap_err();
+/// match refused {
+///     Error::RandSizeTooLarge => assert_eq!(refused.code(), "rand_size_too_large"),
+///     other => panic!("unexpected refusal: {other}"),
+/// }
+///
+/// assert_eq!(uxid::decode_with("usr_", "_", 0), Err(Error::Empty));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {

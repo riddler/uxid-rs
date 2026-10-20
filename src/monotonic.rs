@@ -165,6 +165,28 @@ impl Monotonic {
     /// behind the `std` and `getrandom` features, is this method with the
     /// platform source and the system clock.
     ///
+    /// ```
+    /// use uxid::{ByteSource, Error, Monotonic, Options, Size};
+    ///
+    /// /// Writes the same byte every time: for a test, never for real ids.
+    /// struct Repeat(u8);
+    ///
+    /// impl ByteSource for Repeat {
+    ///     fn fill(&mut self, buf: &mut [u8]) -> Result<(), Error> {
+    ///         buf.fill(self.0);
+    ///         Ok(())
+    ///     }
+    /// }
+    ///
+    /// let mut ids = Monotonic::new(&Options::new().prefix("usr").size(Size::S))?;
+    /// let now = 1_700_000_000_000;
+    /// // The first id seeds the random field; the next, in the same
+    /// // millisecond, steps it.
+    /// assert_eq!(ids.generate_with(&mut Repeat(0), now)?, "usr_01hf7yat000000");
+    /// assert_eq!(ids.generate_with(&mut Repeat(0), now)?, "usr_01hf7yat000001");
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
     /// # Errors
     ///
     /// - [`Error::TimeOutOfRange`] for a `now` above 2^48 - 1, or a step that

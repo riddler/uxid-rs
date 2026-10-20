@@ -183,8 +183,9 @@ mise run gate           # full gate
 - A change touching no path the manifest (`.claude/wurk.json`) lists under
   `gate.build_paths` or `gate.also_gated_paths` has no gate to run and may
   commit on review of the diff alone. Those two lists are the one source for
-  the exception: `src/`, `tests/`, `examples/`, `benches/`, `build.rs` and
-  `conformance/` are what the gate compiles and checks, and `.cargo/`,
+  the exception: `src/`, `tests/`, `examples/`, `benches/`, `build.rs`,
+  `conformance/` and `README.md` are what the gate compiles and checks (the
+  README's Rust examples run as doctests), and `.cargo/`,
   `Cargo.toml`, `Cargo.lock`, `mise.toml`, `deny.toml`, `rustfmt.toml` and
   `clippy.toml` decide how it runs and what it resolves (a lock move alone
   changes the crates the gate builds against). A listed path need not exist
