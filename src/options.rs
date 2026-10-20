@@ -86,8 +86,8 @@ pub enum Case {
     Upper,
 }
 
-/// The options of [`generate`](crate::generate) and
-/// [`generate_with`](crate::generate_with).
+/// The options of [`generate_with`](crate::generate_with) and of
+/// `generate`, behind the `std` and `getrandom` features.
 ///
 /// Build one from [`Options::new`] (or [`Default`]) and the setters, each of
 /// which takes and returns the value; an option left unset takes the default
@@ -103,7 +103,7 @@ pub enum Case {
 ///     .case(Case::Upper);
 /// # let _ = options;
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Options<'a> {
     pub(crate) prefix: &'a str,
@@ -172,7 +172,10 @@ impl<'a> Options<'a> {
     /// 48 bits in 10, the freed byte handed to the random field (except at
     /// `xl`). A time whose first compact character would be the
     /// deterministic marker, from mid-2038 until the 40-bit window rolls over
-    /// in 2039, is [`Error::CompactTimeOutOfRange`]. Defaults to `false`.
+    /// in 2039, is [`Error::CompactTimeOutOfRange`]. A time above 2^48 - 1
+    /// is [`Error::TimeOutOfRange`] here too, as in standard time: that is
+    /// this crate's answer, which the conformance corpus does not fix.
+    /// Defaults to `false`.
     #[must_use]
     pub const fn compact_time(mut self, compact_time: bool) -> Self {
         self.compact_time = compact_time;
@@ -197,8 +200,8 @@ impl<'a> Options<'a> {
 
     /// The time, in milliseconds since the Unix epoch, from 0 to 2^48 - 1;
     /// above that is [`Error::TimeOutOfRange`]. Defaults to the current
-    /// time: the system clock for [`generate`](crate::generate), the `now`
-    /// argument for [`generate_with`](crate::generate_with).
+    /// time: the system clock for `generate`, the `now` argument for
+    /// [`generate_with`](crate::generate_with).
     #[must_use]
     pub const fn time(mut self, millis: u64) -> Self {
         self.time = Some(millis);

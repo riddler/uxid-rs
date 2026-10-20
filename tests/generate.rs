@@ -34,7 +34,7 @@ struct Failing(Error);
 
 impl ByteSource for Failing {
     fn fill(&mut self, _buf: &mut [u8]) -> Result<(), Error> {
-        Err(self.0)
+        Err(self.0.clone())
     }
 }
 
@@ -423,10 +423,36 @@ fn the_byte_source_fills_exactly_the_random_width() {
 fn a_byte_source_failure_is_returned_unchanged() {
     let options = Options::new().prefix("usr").time(T);
     for returned in [Error::ByteSource, Error::TimeOutOfRange] {
-        let error = generate_with(&options, &mut Failing(returned), 0).unwrap_err();
+        let error = generate_with(&options, &mut Failing(returned.clone()), 0).unwrap_err();
         assert_eq!(error, returned);
     }
     assert_eq!(Error::ByteSource.code(), "byte_source");
+}
+
+// Sabotage: a `&mut T` impl that leaves the buffer untouched turns this red.
+#[test]
+fn a_mutable_reference_to_a_source_is_a_source() {
+    let mut inner = Repeating {
+        byte: 0xff,
+        asked: Vec::new(),
+    };
+    let mut source = &mut inner;
+    let options = Options::new().size(Size::S).time(T);
+    let id = generate_with(&options, &mut source, 0).unwrap();
+    assert_eq!(id, "01hf7yat00zzz1");
+    assert_eq!(inner.asked, [2]);
+}
+
+// Sabotage: a `Box<T>` impl that leaves the buffer untouched turns this red.
+#[test]
+fn a_boxed_source_is_a_source() {
+    let mut source: Box<dyn ByteSource> = Box::new(Repeating {
+        byte: 0xff,
+        asked: Vec::new(),
+    });
+    let options = Options::new().size(Size::S).time(T);
+    let id = generate_with(&options, &mut source, 0).unwrap();
+    assert_eq!(id, "01hf7yat00zzz1");
 }
 
 // Sabotage: removing a long spelling from `Size`'s `FromStr` turns this red.
@@ -470,33 +496,49 @@ fn errors_display_a_sentence_naming_the_refusal() {
 
 #[cfg(all(feature = "std", feature = "getrandom"))]
 mod defaults {
-    use uxid::{ByteSource, GetrandomSource, Options, Size, generate};
+    use uxid::{ByteSource, GetrandomSource, Options, Size, generate, now_millis};
+
+    /// The time field of a standard-time body, read back as milliseconds.
+    fn standard_time(body: &str) -> u64 {
+        body[..10].chars().fold(0, |time, c| {
+            let value = "0123456789abcdefghjkmnpqrstvwxyz".find(c).unwrap() as u64;
+            time * 32 + value
+        })
+    }
 
     // Sabotage: a `generate` that passes 0 in place of the system clock turns this red.
     #[test]
     fn generate_reads_the_clock_and_the_platform_source() {
-        let before = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let before = now_millis().unwrap();
         let id = generate(&Options::new().prefix("usr").size(Size::Xs)).unwrap();
-        let expected_head = uxid::generate_with(
-            &Options::new().size(Size::Xs).time(before),
-            &mut GetrandomSource,
-            0,
-        )
-        .unwrap();
-        // The two times differ by milliseconds at most: compare the leading
-        // characters, which change only every 2^25 ms (about nine hours).
+        let after = now_millis().unwrap();
         assert_eq!(id.len(), "usr_".len() + 10);
         assert!(id.starts_with("usr_"));
-        assert_eq!(id[4..9], expected_head[..5]);
+        let time = standard_time(&id[4..]);
+        assert!(
+            before <= time && time <= after,
+            "{before} <= {time} <= {after}"
+        );
 
         let full = generate(&Options::new()).unwrap();
         assert_eq!(full.len(), 26);
         assert!(
             full.chars()
                 .all(|c| "0123456789abcdefghjkmnpqrstvwxyz".contains(c))
+        );
+    }
+
+    // Sabotage: a `now_millis` that answers 0 turns this red.
+    #[test]
+    fn now_millis_reads_the_system_clock() {
+        let system = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let clock = now_millis().unwrap();
+        assert!(
+            clock >= system && clock - system < 60_000,
+            "{system} {clock}"
         );
     }
 
