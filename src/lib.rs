@@ -14,7 +14,9 @@
 //! [`decode_with`] reads an id back to a [`Decoded`] (its prefix, size, time
 //! form, whether it is deterministic, and its time), or refuses it with the
 //! wire format's reason; it never panics on malformed input. [`is_valid`]
-//! and [`is_deterministic`] answer the two common questions about a string.
+//! and [`is_deterministic`] answer the two common questions about a string
+//! under the delimiter `_`; [`is_valid_with`] and [`is_deterministic_with`]
+//! take the delimiter, and the first a prefix to require.
 //!
 //! ```
 //! use uxid::{Options, Size};
@@ -51,7 +53,8 @@
 //! - `serde`: declared for later use; it derives nothing yet.
 //!
 //! With no feature the crate is `no_std` with `alloc`: [`generate_with`],
-//! [`decode_with`], [`is_valid`], [`is_deterministic`], [`Options`],
+//! [`decode_with`], [`is_valid`], [`is_valid_with`], [`is_deterministic`],
+//! [`is_deterministic_with`], [`Options`],
 //! [`Decoded`], [`Monotonic`] with its `generate_with`, [`ByteSource`] and
 //! [`Error`] are all present, and the caller
 //! supplies the byte source and the time (a deterministic id reads neither,
@@ -80,7 +83,9 @@ mod source;
 pub use clock::now_millis;
 #[cfg(feature = "std")]
 pub use decode::decode;
-pub use decode::{Decoded, decode_with, is_deterministic, is_valid};
+pub use decode::{
+    Decoded, decode_with, is_deterministic, is_deterministic_with, is_valid, is_valid_with,
+};
 pub use error::Error;
 #[cfg(all(feature = "std", feature = "getrandom"))]
 pub use generate::generate;

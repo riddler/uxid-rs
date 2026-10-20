@@ -37,6 +37,23 @@ reading the system time: it decodes each such case at the window's first
 millisecond, at 1700000000000 ms and at the window's last millisecond. A
 standard body carries its whole time and reads no clock.
 
+## The validity checks
+
+The guide does not specify a validity check. The reference's `valid?` and
+`deterministic?` take a delimiter option, and `valid?` a prefix to require;
+this crate takes the same inputs. `is_valid(id)` and `is_deterministic(id)`
+check under the delimiter `_`; `is_valid_with(id, delimiter, prefix)` and
+`is_deterministic_with(id, delimiter)` take the delimiter, the first with an
+`Option<&str>` prefix the id must carry exactly (`None` or an empty prefix
+accepts any prefix or none). Each answers whether `decode_with` decodes the
+id under that delimiter, and the deterministic checks also whether its body
+starts with the marker `z` or `Z`, so they accept exactly what the decoder
+accepts. The reference's own checks are looser: its `valid?` tests the
+body's alphabet and a minimum length rather than the length table, and its
+`deterministic?` reads only the first body character. The checks here read
+no clock. The test suite runs every corpus decode case and every decode
+refusal through them, under `_` and under a second delimiter.
+
 ## What this crate decides for itself
 
 The Rust API: the function, type and method names, the `Options` builder, the

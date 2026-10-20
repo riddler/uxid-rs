@@ -63,6 +63,7 @@ assert_eq!(decoded.prefix(), Some("cus"));
 assert_eq!(decoded.size(), Size::S);
 assert_eq!(decoded.time(), Some(1_700_000_000_000));
 assert!(uxid::is_valid("cus_01hf7yat0004h1"));
+assert!(uxid::is_valid_with("cus_01hf7yat0004h1", "_", Some("cus")));
 assert_eq!(uxid::decode("cus_"), Err(uxid::Error::Empty));
 
 // Monotonic: ids from one generator increase strictly, also within one
@@ -87,6 +88,15 @@ form that takes them as arguments instead: `generate_with` takes a
 feature and build under `no_std`. Fixed random bytes (`Options::rand`) exist
 for test vectors: an id built from them is exactly as guessable as those
 bytes.
+
+`is_valid(id)` and `is_deterministic(id)` check an id under the delimiter
+`_` and read no clock. `is_valid_with(id, delimiter, prefix)` takes the
+delimiter and an `Option<&str>` prefix the id must carry exactly (`None` or
+an empty prefix accepts any prefix or none), and
+`is_deterministic_with(id, delimiter)` takes the delimiter. Each answers
+whether the id decodes (and, for the deterministic checks, whether its body
+starts with the marker `z` or `Z`); an empty delimiter decodes nothing, so
+every check is `false` under it.
 
 ## Compatibility
 
@@ -117,9 +127,9 @@ bytes.
   ```
 
   With no feature at all, `generate_with`, `decode_with`, `is_valid`,
-  `is_deterministic`, `Options`, `Decoded`, `Monotonic` with its
-  `generate_with`, `ByteSource` and `Error` are all present, and you supply
-  the byte source and the time.
+  `is_valid_with`, `is_deterministic`, `is_deterministic_with`, `Options`,
+  `Decoded`, `Monotonic` with its `generate_with`, `ByteSource` and `Error`
+  are all present, and you supply the byte source and the time.
 
 ## Documentation
 

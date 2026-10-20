@@ -6,7 +6,9 @@
 use std::fs;
 
 use serde_json::Value;
-use uxid::{Error, Size, decode_with, is_deterministic, is_valid};
+use uxid::{
+    Error, Size, decode_with, is_deterministic, is_deterministic_with, is_valid, is_valid_with,
+};
 
 /// The first decoder clock, in milliseconds, at which every compact decode
 /// case holds (inclusive), as the corpus README bounds it.
@@ -39,6 +41,30 @@ fn decode_inputs() -> Vec<(String, String, bool)> {
             )
         })
         .collect()
+}
+
+/// Every decode case's id, input and expected prefix (`None` for the
+/// corpus's null), in file order.
+fn decode_prefixes() -> Vec<(String, String, Option<String>)> {
+    cases("decode.json")
+        .iter()
+        .map(|case| {
+            (
+                case["id"].as_str().unwrap().to_owned(),
+                case["input"].as_str().unwrap().to_owned(),
+                case["expected"]["prefix"].as_str().map(str::to_owned),
+            )
+        })
+        .collect()
+}
+
+/// `input` with its last `_` replaced by `delimiter`, or unchanged when it
+/// has none.
+fn redelimit(input: &str, delimiter: &str) -> String {
+    match input.rfind('_') {
+        Some(at) => format!("{}{delimiter}{}", &input[..at], &input[at + 1..]),
+        None => input.to_owned(),
+    }
 }
 
 /// The input of the decode case `id`.
@@ -198,6 +224,75 @@ fn is_deterministic_is_a_well_formed_marker_body() {
     assert!(!is_deterministic("usr_zcvt7epac0t1ebcsjfyf7cwzi5"));
     assert!(!is_deterministic("usr_zcvt"));
     assert!(!is_deterministic(""));
+}
+
+// Sabotage: an `is_valid_with` that splits on `_` whatever the delimiter turns this red.
+#[test]
+fn is_valid_with_is_whether_the_id_decodes_under_its_delimiter() {
+    for (id, input, _) in decode_inputs() {
+        assert!(is_valid_with(&input, "_", None), "{id}");
+        assert!(is_valid_with(&redelimit(&input, "--"), "--", None), "{id}");
+    }
+    for (id, input) in refused_inputs() {
+        assert!(!is_valid_with(&input, "_", None), "{id}");
+        assert!(!is_valid_with(&redelimit(&input, "--"), "--", None), "{id}");
+    }
+    assert!(!is_valid_with("usr_01hf7yat00", "--", None));
+}
+
+// Sabotage: an `is_valid_with` that ignores the required prefix turns this red.
+#[test]
+fn is_valid_with_requires_exactly_the_prefix_given() {
+    for (id, input, prefix) in decode_prefixes() {
+        assert!(is_valid_with(&input, "_", Some("")), "{id}");
+        assert!(!is_valid_with(&input, "_", Some("org")), "{id}");
+        match prefix {
+            Some(prefix) => {
+                assert!(is_valid_with(&input, "_", Some(&prefix)), "{id}");
+                let redelimited = redelimit(&input, "--");
+                assert!(is_valid_with(&redelimited, "--", Some(&prefix)), "{id}");
+                assert!(!is_valid_with(&input, "_", Some(&prefix[1..])), "{id}");
+            }
+            None => assert!(!is_valid_with(&input, "_", Some("usr")), "{id}"),
+        }
+    }
+    for (id, input) in refused_inputs() {
+        assert!(!is_valid_with(&input, "_", Some("usr")), "{id}");
+    }
+}
+
+// Sabotage: an `is_deterministic_with` that splits on `_` whatever the delimiter turns this red.
+#[test]
+fn is_deterministic_with_is_a_well_formed_marker_body_under_its_delimiter() {
+    for (id, input, deterministic) in decode_inputs() {
+        assert_eq!(is_deterministic_with(&input, "_"), deterministic, "{id}");
+        let redelimited = redelimit(&input, "--");
+        assert_eq!(
+            is_deterministic_with(&redelimited, "--"),
+            deterministic,
+            "{id}"
+        );
+    }
+    for (id, input) in refused_inputs() {
+        assert!(!is_deterministic_with(&input, "_"), "{id}");
+        assert!(
+            !is_deterministic_with(&redelimit(&input, "--"), "--"),
+            "{id}"
+        );
+    }
+    assert!(!is_deterministic_with(
+        "usr--zcvt7epac0t1ebcsjfyf7cwz25",
+        "_"
+    ));
+}
+
+// Sabotage: an `is_valid_with` that falls back to `_` for an empty delimiter turns this red.
+#[test]
+fn an_empty_delimiter_makes_every_check_false() {
+    for (id, input, _) in decode_inputs() {
+        assert!(!is_valid_with(&input, "", None), "{id}");
+        assert!(!is_deterministic_with(&input, ""), "{id}");
+    }
 }
 
 // Sabotage: a `decode` that splits on another delimiter than `_` turns this red.

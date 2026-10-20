@@ -208,28 +208,48 @@ pub fn decode(id: &str) -> Result<Decoded, Error> {
 
 /// Whether `id` is a well-formed id under the delimiter `_`: whether
 /// [`decode_with`] answers a value for it. Validity does not depend on the
-/// clock, so this reads none and needs no feature.
-///
-/// For another delimiter, or to require a prefix, decode instead; the clock
-/// passed does not change the answer:
+/// clock, so this reads none and needs no feature. [`is_valid_with`] takes
+/// another delimiter and a prefix to require.
 ///
 /// ```
 /// assert!(uxid::is_valid("cus_01hf7yat0004h1"));
 /// assert!(!uxid::is_valid("cus_01hf7yat0004h12"));
 /// assert!(!uxid::is_valid(""));
-///
-/// let id = "cus--01hf7yat0004h1";
-/// assert!(uxid::decode_with(id, "--", 0).is_ok_and(|d| d.prefix() == Some("cus")));
 /// ```
 #[must_use]
 pub fn is_valid(id: &str) -> bool {
-    decode_with(id, DEFAULT_DELIMITER, 0).is_ok()
+    is_valid_with(id, DEFAULT_DELIMITER, None)
+}
+
+/// Whether `id` is a well-formed id under the delimiter `delimiter` and,
+/// given `prefix`, carries exactly that prefix: whether [`decode_with`]
+/// answers a value for it whose [`prefix`](Decoded::prefix) is the one
+/// required. `None` or an empty prefix accepts any prefix or none; an id
+/// with no delimiter has no prefix, so it fails any other prefix. An empty
+/// delimiter decodes nothing, so every id is invalid under it. Like
+/// [`is_valid`], this reads no clock and needs no feature.
+///
+/// ```
+/// assert!(uxid::is_valid_with("cus--01hf7yat0004h1", "--", None));
+/// assert!(uxid::is_valid_with("cus--01hf7yat0004h1", "--", Some("cus")));
+/// assert!(!uxid::is_valid_with("cus--01hf7yat0004h1", "--", Some("usr")));
+/// assert!(uxid::is_valid_with("cus_01hf7yat0004h1", "_", Some("")));
+/// assert!(!uxid::is_valid_with("01hf7yat0004h1", "_", Some("cus")));
+/// assert!(!uxid::is_valid_with("cus_01hf7yat0004h1", "", None));
+/// ```
+#[must_use]
+pub fn is_valid_with(id: &str, delimiter: &str, prefix: Option<&str>) -> bool {
+    decode_with(id, delimiter, 0).is_ok_and(|decoded| match prefix {
+        None | Some("") => true,
+        Some(required) => decoded.prefix() == Some(required),
+    })
 }
 
 /// Whether `id` is a well-formed deterministic id under the delimiter `_`:
 /// one [`decode_with`] answers a value for whose body starts with the marker
 /// `z` or `Z`. A malformed string is not one, whatever its first body
 /// character. It reads no clock and needs no feature.
+/// [`is_deterministic_with`] takes another delimiter.
 ///
 /// ```
 /// assert!(uxid::is_deterministic("usr_zcvt7epac0t1ebcsjfyf7cwz25"));
@@ -238,7 +258,23 @@ pub fn is_valid(id: &str) -> bool {
 /// ```
 #[must_use]
 pub fn is_deterministic(id: &str) -> bool {
-    decode_with(id, DEFAULT_DELIMITER, 0).is_ok_and(|decoded| decoded.deterministic)
+    is_deterministic_with(id, DEFAULT_DELIMITER)
+}
+
+/// Whether `id` is a well-formed deterministic id under the delimiter
+/// `delimiter`: one [`decode_with`] answers a value for whose body starts
+/// with the marker `z` or `Z`. A malformed string is not one, whatever its
+/// first body character, and an empty delimiter decodes nothing. Like
+/// [`is_deterministic`], this reads no clock and needs no feature.
+///
+/// ```
+/// assert!(uxid::is_deterministic_with("usr--zcvt7epac0t1ebcsjfyf7cwz25", "--"));
+/// assert!(!uxid::is_deterministic_with("usr--01hf7yat0004h1", "--"));
+/// assert!(!uxid::is_deterministic_with("usr_zcvt7epac0t1ebcsjfyf7cwz25", ""));
+/// ```
+#[must_use]
+pub fn is_deterministic_with(id: &str, delimiter: &str) -> bool {
+    decode_with(id, delimiter, 0).is_ok_and(|decoded| decoded.deterministic)
 }
 
 /// Decodes `id`, calling `clock` only for a compact body.
