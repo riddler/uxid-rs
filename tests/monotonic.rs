@@ -1,8 +1,6 @@
-//! Monotonic generation against every case of the conformance corpus's
-//! `conformance/monotonic.json` and its two monotonic generate refusals in
-//! `conformance/invalid.json` (uxid-ex `v2.10.0`), each named by its case id,
-//! plus the rule's edges the corpus does not reach. Every case file runs in
-//! full once the corpus is vendored.
+//! Monotonic generation beyond the conformance corpus's monotonic cases and
+//! its two monotonic generate refusals, which `tests/corpus.rs` runs: the
+//! rule's edges the corpus does not reach.
 
 use uxid::{ByteSource, Case, Error, Monotonic, Options, Size, generate_with};
 
@@ -16,7 +14,7 @@ enum Draw {
 /// A byte source that replays recorded draws in order, as the bytes the
 /// generator documents reading for each: a seed is `w` bytes big-endian, a
 /// step is `step - 1` in `ceil(w / 2)` bytes big-endian. It checks that each
-/// request has the length its draw needs, and that every draw is used.
+/// request has the length its draw needs.
 struct Replay {
     width: usize,
     draws: Vec<Draw>,
@@ -30,10 +28,6 @@ impl Replay {
             draws: draws.to_vec(),
             next: 0,
         }
-    }
-
-    fn finished(&self) -> bool {
-        self.next == self.draws.len()
     }
 }
 
@@ -85,170 +79,19 @@ impl ByteSource for Unreachable {
     }
 }
 
-struct Vector {
-    id: &'static str,
-    prefix: Option<&'static str>,
-    size: Size,
-    compact: bool,
-    width: usize,
-    draws: &'static [Draw],
-    times: &'static [u64],
-    expected: &'static [&'static str],
-}
-
 const T: u64 = 1_700_000_000_000;
 
-/// The corpus's monotonic cases. Each draw list is the case's
-/// `initial_seed`, then its `steps` in order, with its `overflow_seed`
-/// after the step that overflows the field.
-const CASES: &[Vector] = &[
-    Vector {
-        id: "monotonic/xl-same-millisecond",
-        prefix: Some("usr"),
-        size: Size::Xl,
-        compact: false,
-        width: 10,
-        draws: &[
-            Draw::Seed(123_456_789),
-            Draw::Step(1),
-            Draw::Step(1_099_511_627_776),
-            Draw::Step(42),
-        ],
-        times: &[T, T, T, T],
-        expected: &[
-            "usr_01hf7yat0000000000003nqk8n",
-            "usr_01hf7yat0000000000003nqk8p",
-            "usr_01hf7yat0000000001003nqk8p",
-            "usr_01hf7yat0000000001003nqka0",
-        ],
-    },
-    Vector {
-        id: "monotonic/m-clock-moves-back",
-        prefix: Some("usr"),
-        size: Size::M,
-        compact: false,
-        width: 5,
-        draws: &[
-            Draw::Seed(1000),
-            Draw::Step(5),
-            Draw::Step(1_048_576),
-            Draw::Step(7),
-        ],
-        times: &[T, T - 1, T - 10, T],
-        expected: &[
-            "usr_01hf7yat00000000z8",
-            "usr_01hf7yat00000000zd",
-            "usr_01hf7yat00000100zd",
-            "usr_01hf7yat00000100zm",
-        ],
-    },
-    Vector {
-        id: "monotonic/s-overflow-bumps-time",
-        prefix: Some("usr"),
-        size: Size::S,
-        compact: false,
-        width: 2,
-        draws: &[
-            Draw::Seed(65000),
-            Draw::Step(200),
-            Draw::Step(250),
-            Draw::Step(100),
-            Draw::Seed(1234),
-            Draw::Step(7),
-            Draw::Step(3),
-        ],
-        times: &[T, T, T, T, T, T + 1],
-        expected: &[
-            "usr_01hf7yat00zqm0",
-            "usr_01hf7yat00ztr0",
-            "usr_01hf7yat00zyn0",
-            "usr_01hf7yat010k90",
-            "usr_01hf7yat010kc1",
-            "usr_01hf7yat010ke0",
-        ],
-    },
-    Vector {
-        id: "monotonic/xs-compact-overflow-clock-back",
-        prefix: Some("usr"),
-        size: Size::Xs,
-        compact: true,
-        width: 1,
-        draws: &[
-            Draw::Seed(250),
-            Draw::Step(5),
-            Draw::Step(16),
-            Draw::Seed(9),
-        ],
-        times: &[T, T, T - 1],
-        expected: &["usr_hf7yat00z2", "usr_hf7yat00z7", "usr_hf7yat0111"],
-    },
-    Vector {
-        id: "monotonic/l-compact-single",
-        prefix: Some("usr"),
-        size: Size::L,
-        compact: true,
-        width: 8,
-        draws: &[Draw::Seed(0)],
-        times: &[T],
-        expected: &["usr_hf7yat000000000000000"],
-    },
-    Vector {
-        id: "monotonic/s-compact-no-prefix-largest-step",
-        prefix: None,
-        size: Size::S,
-        compact: true,
-        width: 3,
-        draws: &[Draw::Seed(0), Draw::Step(4096)],
-        times: &[T, T],
-        expected: &["hf7yat0000000", "hf7yat0000800"],
-    },
-];
-
-// Sabotage: carrying `now` in place of the last time on a step turns m-clock-moves-back red.
+// Sabotage: checking fixed `rand` bytes before `from` turns this red.
 #[test]
-fn monotonic_cases_match_the_corpus() {
-    for case in CASES {
-        let options = Options::new()
-            .prefix(case.prefix.unwrap_or(""))
-            .size(case.size)
-            .compact_time(case.compact);
-        let mut generator = Monotonic::new(&options).unwrap();
-        let mut source = Replay::new(case.width, case.draws);
-        let ids: Vec<String> = case
-            .times
-            .iter()
-            .map(|&now| generator.generate_with(&mut source, now).unwrap())
-            .collect();
-        assert_eq!(ids, case.expected, "{}", case.id);
-        assert!(source.finished(), "{}: draws left unread", case.id);
-    }
-}
-
-// Sabotage: building a generator with `from` set turns this red.
-#[test]
-fn invalid_generate_from_with_monotonic_is_refused() {
-    // invalid/generate-from-with-monotonic
-    let options = Options::new().prefix("usr").from("alice@example.com");
-    let error = Monotonic::new(&options).err();
-    assert_eq!(error, Some(Error::FromWithMonotonic));
-    assert_eq!(Error::FromWithMonotonic.code(), "from_with_monotonic");
-    // `from` is refused first, before fixed `rand` bytes.
-    let both = options.rand(&[0x01]);
-    assert_eq!(Monotonic::new(&both).err(), Some(Error::FromWithMonotonic));
-}
-
-// Sabotage: building a generator with fixed `rand` bytes set turns this red.
-#[test]
-fn invalid_generate_rand_with_monotonic_is_refused() {
-    // invalid/generate-rand-with-monotonic
+fn from_is_refused_before_fixed_rand_bytes() {
     let options = Options::new()
         .prefix("usr")
-        .rand(&[0x01, 0x02])
-        .size(Size::S)
-        .time(T);
-    let error = Monotonic::new(&options).err();
-    assert_eq!(error, Some(Error::RandWithMonotonic));
-    assert_eq!(Error::RandWithMonotonic.code(), "rand_with_monotonic");
+        .from("alice@example.com")
+        .rand(&[0x01]);
+    assert_eq!(
+        Monotonic::new(&options).err(),
+        Some(Error::FromWithMonotonic)
+    );
 }
 
 // Sabotage: dropping the zero-width check turns this red.
