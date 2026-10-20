@@ -4,30 +4,60 @@ name: Release
 # when four things hold at the tagged commit: it is on the default branch,
 # the tag names the version Cargo.toml states there (package.version),
 # crates.io does not already show that version, and the full quality gate is
-# green there. The first three are checked before anything is built. Nothing
-# else triggers it - no branch push, no pull request, no manual dispatch.
+# green there. Nothing else triggers it - no branch push, no pull request, no
+# manual dispatch.
 #
-# A run that fails before the publish step uploads the crate publishes
-# nothing, and the tag stays where it is. Once the upload is done the version
-# is on crates.io, whatever happens after it: a failure after the upload - in
-# cargo's own wait for the index to show the version, in the address step, or
-# in the token revocation that ends the job - leaves the version published
-# and the run red, and a re-run stops
-# at the "already on crates.io" check and reports it, so the run stays red
-# although the publish succeeded. The one manual act is re-running a run
-# whose publish step failed on a registry or network error before the
-# upload, or whose token step failed before crates.io trusted this workflow,
-# from the run's page in the Actions tab.
+# Two jobs, each checking out the tagged commit (github.sha):
 #
-# crates.io trusted publishing: the token step exchanges this run's OIDC
-# identity for a short-lived crates.io token
+# - `verify` (contents: read, and no other permission) runs the first three
+#   checks before anything is built, then the full quality gate, then
+#   `cargo package --locked`, which packages the crate and builds the
+#   package (cargo's verify build), and records the package's SHA-256. Every
+#   build script and proc macro the release runs, and every cargo tool the
+#   gate runs, run here, in a job that cannot ask GitHub for an OIDC token.
+# - `publish` (contents: read and id-token: write, the only job that can ask
+#   for an OIDC token) starts only when `verify` succeeded. It runs the
+#   version check and the crates.io check again rather than trusting
+#   `verify`'s result, because a re-run of this job alone can come long after
+#   `verify` ran. It packages the crate again without building it and stops
+#   unless that package's SHA-256 equals the one `verify` recorded. Only then
+#   does it ask for the token and run `cargo publish --locked --no-verify`,
+#   which packages the same commit the same way and uploads it without
+#   building it a second time: the build that would verify it is the one
+#   `verify` already ran. Nothing in this job compiles anything.
+#
+# A failure in `verify` publishes nothing: `publish` does not start and no
+# token is asked for. A failure in `publish` before the upload publishes
+# nothing either. Once the upload is done the version is on crates.io,
+# whatever happens after it: a failure after the upload - in cargo's own wait
+# for the index to show the version, in the address step, or in the token
+# revocation that ends the job - leaves the version published and the run
+# red, and a re-run stops at the "already on crates.io" check (in `verify`,
+# or in `publish` when that job is re-run alone) and reports it, so the run
+# stays red although the publish succeeded. No failure moves or deletes the
+# tag.
+#
+# The manual act this workflow needs is a re-run from the run's page in the
+# Actions tab (every job, or the failed `publish` job alone, which reuses the
+# SHA-256 `verify` recorded), for a run that failed before the upload for a
+# reason outside the tagged commit, such as a registry or network error,
+# crates.io answering the crates.io check with a status other than 200 or
+# 404, a gate step that failed on the runner rather than on the code, or a
+# token step that failed before crates.io trusted this workflow. A failure
+# the tagged commit itself causes (it is not on the default branch, the tag
+# and Cargo.toml name different versions, the gate is red) fails the same
+# way on every re-run.
+#
+# crates.io trusted publishing: the token step in `publish` exchanges this
+# run's OIDC identity for a short-lived crates.io token
 # (rust-lang/crates-io-auth-action), the publish step alone receives it as
 # CARGO_REGISTRY_TOKEN, and the action's post step revokes it when the job
-# ends. No long-lived token exists anywhere - not in this file, not in the
-# repository's or the organisation's secrets. crates.io accepts the exchange
-# only once the crate's settings on crates.io name this repository and this
-# workflow file as a trusted publisher; until then the token step fails and
-# nothing is published.
+# ends. The workflow reads no secret (no `secrets` expression appears in this
+# file) and no long-lived token; the checkout uses GitHub's automatic per-job
+# GITHUB_TOKEN, limited to that job's `permissions`. crates.io accepts the
+# exchange only once the crate's settings on crates.io name this repository
+# and this workflow file as a trusted publisher; until then the token step
+# fails and nothing is published.
 #
 # This file records the publish decision for this repository, which keeps no
 # decision records (CLAUDE.md, "Agent authority in this repo": the "Release
@@ -42,13 +72,12 @@ on:
     tags:
       - "v*.*.*"
 
-# contents: read for the checkout and the default branch fetch; id-token:
-# write lets the token step ask GitHub for the OIDC token crates.io trusts.
-# Every other permission is none. The tag already exists when this runs, and
-# nothing here creates or pushes one.
+# The default for every job: contents: read, every other permission none.
+# Each job states its own permissions below, and only `publish` adds
+# id-token: write. The tag already exists when this runs, and nothing here
+# creates or pushes one.
 permissions:
   contents: read
-  id-token: write
 
 # One run per tag, and a run in progress is never cancelled: a publish cut
 # off part way is worse than one that finishes.
@@ -57,15 +86,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Verify, gate and publish
+  verify:
+    name: Verify and gate
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
+    # contents: read for the checkout and the default branch fetch. No
+    # id-token: nothing in this job can ask GitHub for an OIDC token.
+    permissions:
+      contents: read
+
+    # The package's SHA-256, which `publish` matches before it asks for the
+    # token.
+    outputs:
+      crate_sha256: ${{ steps.package.outputs.sha256 }}
+
     steps:
-      # Full history: the ancestry check below walks it.
+      # The tagged commit, by SHA. Full history: the ancestry check below
+      # walks it.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       # The default branch is read from the push event itself, never written
@@ -92,6 +133,7 @@ jobs:
 
       # Cargo.toml is read with Python's TOML reader (on the runner already),
       # not with cargo, so this check runs before any toolchain is installed.
+      # `publish` runs the same check again.
       - name: Check the tag names the version in Cargo.toml
         run: |
           set -euo pipefail
@@ -105,11 +147,11 @@ jobs:
           echo "${GITHUB_REF_NAME} matches Cargo.toml version ${file_version}"
 
       # A version crates.io already shows is reported, never published again
-      # (crates.io would refuse a reused version anyway). This also answers a
-      # re-run of a run that did publish. The crate name is read from
-      # Cargo.toml, so the version checked is the version of the crate this
-      # run would publish. crates.io's API refuses a request with no
-      # User-Agent, and this read needs no token.
+      # (crates.io would refuse a reused version anyway). The crate name is
+      # read from Cargo.toml, so the version checked is the version of the
+      # crate this run would publish. crates.io's API refuses a request with
+      # no User-Agent, and this read needs no token. `publish` runs the same
+      # check again just before it asks for the token.
       - name: Check crates.io does not already show this version
         run: |
           set -euo pipefail
@@ -128,8 +170,8 @@ jobs:
 
       # The toolchain comes from mise.toml, provisioned by mise itself: the
       # Rust release and its components, cargo-llvm-cov and cargo-deny, at
-      # the versions pinned there. No tool cache is restored here: a job that
-      # can mint a publish token installs its tools fresh rather than from a
+      # the versions pinned there. No tool cache is restored in either job of
+      # this workflow: a release installs its tools fresh rather than from a
       # cache another run wrote.
       - uses: jdx/mise-action@v4
         with:
@@ -151,10 +193,10 @@ jobs:
       # --- end of the gate.
 
       # The gate's build and coverage output lands under target/, which
-      # .gitignore covers; `cargo publish` refuses a checkout with uncommitted
-      # changes or untracked files that are not ignored, so a gate that left
-      # either stops here, before the token is asked for, with the files
-      # named.
+      # .gitignore covers. cargo refuses to package only when a file the
+      # package would include has uncommitted changes; this check is wider:
+      # a gate that left any changed file, or any untracked file that is not
+      # ignored, stops the release here, with the files named.
       - name: Check the gate left the checkout clean
         run: |
           set -euo pipefail
@@ -164,21 +206,119 @@ jobs:
             exit 1
           fi
 
-      # The token is asked for after the gate, so it is minted only for a
+      # `cargo package --locked` packages the crate against the crates
+      # Cargo.lock pins, unpacks the package and builds it: the verify build
+      # `cargo publish` would otherwise run in `publish`, run here instead so
+      # its build scripts and proc macros never share a job with the OIDC
+      # permission. The package's SHA-256 is this job's output.
+      - name: Package the crate and build the package
+        id: package
+        run: |
+          set -euo pipefail
+          name="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["name"])')"
+          version="${GITHUB_REF_NAME#v}"
+          mise exec -- cargo package --locked
+          crate="target/package/${name}-${version}.crate"
+          test -f "$crate" || { echo "::error::cargo package left no ${crate}" >&2; exit 1; }
+          sha256="$(sha256sum "$crate" | cut -d ' ' -f 1)"
+          echo "${crate} sha256 ${sha256}"
+          echo "sha256=${sha256}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish to crates.io
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # contents: read for the checkout; id-token: write lets the token step ask
+    # GitHub for the OIDC token crates.io trusts. This is the only job that
+    # holds it.
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      # The same commit `verify` checked out. Nothing here fetches again, so
+      # the checkout keeps no credential in the repository's git config.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      # The same check as in `verify`, run again here: a re-run of this job
+      # alone does not re-run `verify`.
+      - name: Check the tag names the version in Cargo.toml
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          file_version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
+          test -n "$file_version" || { echo "::error::no package.version in Cargo.toml at the tagged commit" >&2; exit 1; }
+          if [ "$tag_version" != "$file_version" ]; then
+            echo "::error::${GITHUB_REF_NAME} names ${tag_version} but Cargo.toml at the tagged commit says ${file_version}; nothing is published" >&2
+            exit 1
+          fi
+          echo "${GITHUB_REF_NAME} matches Cargo.toml version ${file_version}"
+
+      # The same check as in `verify`, run again just before the token is
+      # asked for: crates.io's answer can change while the gate runs, and
+      # this is the check that stops a re-run of a run that did publish.
+      - name: Check crates.io does not already show this version
+        run: |
+          set -euo pipefail
+          name="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["name"])')"
+          version="${GITHUB_REF_NAME#v}"
+          agent="${GITHUB_REPOSITORY} release workflow (https://github.com/${GITHUB_REPOSITORY})"
+          status="$(curl -sS -o /dev/null -w '%{http_code}' -A "$agent" "https://crates.io/api/v1/crates/${name}/${version}")"
+          case "$status" in
+            404) echo "${name} ${version} is not on crates.io yet" ;;
+            200) echo "::error::${name} ${version} is already on crates.io; reported, not published again" >&2; exit 1 ;;
+            *) echo "::error::crates.io answered ${status} for ${name} ${version}; nothing is published" >&2; exit 1 ;;
+          esac
+
+      # The same toolchain `verify` used, installed the same way, so this
+      # job packages with the cargo that built and verified the package.
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.8.2
+          cache: false
+
+      # `--no-verify` packages without building. The SHA-256 must equal the
+      # one `verify` recorded for the package it built, or nothing is
+      # published.
+      - name: Package the crate again and match it to the verified package
+        env:
+          VERIFIED_SHA256: ${{ needs.verify.outputs.crate_sha256 }}
+        run: |
+          set -euo pipefail
+          test -n "$VERIFIED_SHA256" || { echo "::error::verify recorded no package SHA-256; nothing is published" >&2; exit 1; }
+          name="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["name"])')"
+          version="${GITHUB_REF_NAME#v}"
+          mise exec -- cargo package --locked --no-verify
+          crate="target/package/${name}-${version}.crate"
+          test -f "$crate" || { echo "::error::cargo package left no ${crate}" >&2; exit 1; }
+          sha256="$(sha256sum "$crate" | cut -d ' ' -f 1)"
+          if [ "$sha256" != "$VERIFIED_SHA256" ]; then
+            echo "::error::${crate} has sha256 ${sha256}, but the package verify built has ${VERIFIED_SHA256}; nothing is published" >&2
+            exit 1
+          fi
+          echo "${crate} sha256 ${sha256} matches the package verify built"
+
+      # The token is asked for after every check, so it is minted only for a
       # commit that is about to publish. The action is pinned to its major
       # version, as every other action in these workflows is.
       - name: Get a short-lived crates.io token
         id: auth
         uses: rust-lang/crates-io-auth-action@v1
 
-      # The token reaches this step alone. `--locked` packages and verifies
-      # against the crates Cargo.lock pins. cargo builds the packaged crate,
-      # uploads it, then waits for the crates.io index to show the version.
-      # No git tag is created or pushed.
+      # The token reaches this step alone. `--locked` packages against the
+      # crates Cargo.lock pins; `--no-verify` skips the build `verify`
+      # already ran on this commit. cargo uploads the package, then waits for
+      # the crates.io index to show the version. No git tag is created or
+      # pushed.
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-        run: mise exec -- cargo publish --locked
+        run: mise exec -- cargo publish --locked --no-verify
 
       # docs.rs builds the documentation from crates.io on its own queue, so
       # its page may lag the publish by a few minutes.
