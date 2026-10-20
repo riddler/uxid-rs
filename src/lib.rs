@@ -8,6 +8,9 @@
 //! (`Z` in upper case) and characters of a SHA-256 hash of the prefix and that string, so the same
 //! inputs always give the same id.
 //!
+//! A [`Monotonic`] generator, a value the caller holds, makes ids that
+//! increase strictly, also within one millisecond.
+//!
 //! [`decode_with`] reads an id back to a [`Decoded`] (its prefix, size, time
 //! form, whether it is deterministic, and its time), or refuses it with the
 //! wire format's reason; it never panics on malformed input. [`is_valid`]
@@ -42,12 +45,15 @@
 //! - `getrandom` (default): `GetrandomSource`, the platform's secure byte
 //!   source.
 //! - `std` and `getrandom` together: `generate`, which is
-//!   [`generate_with`] with `GetrandomSource` and `now_millis`.
+//!   [`generate_with`] with `GetrandomSource` and `now_millis`, and
+//!   [`Monotonic`]'s `generate`, which is its `generate_with` with the same
+//!   two.
 //! - `serde`: declared for later use; it derives nothing yet.
 //!
 //! With no feature the crate is `no_std` with `alloc`: [`generate_with`],
 //! [`decode_with`], [`is_valid`], [`is_deterministic`], [`Options`],
-//! [`Decoded`], [`ByteSource`] and [`Error`] are all present, and the caller
+//! [`Decoded`], [`Monotonic`] with its `generate_with`, [`ByteSource`] and
+//! [`Error`] are all present, and the caller
 //! supplies the byte source and the time (a deterministic id reads neither,
 //! and a decode reads the time only for a compact body).
 
@@ -66,6 +72,7 @@ mod decode;
 mod deterministic;
 mod error;
 mod generate;
+mod monotonic;
 mod options;
 mod source;
 
@@ -78,6 +85,7 @@ pub use error::Error;
 #[cfg(all(feature = "std", feature = "getrandom"))]
 pub use generate::generate;
 pub use generate::generate_with;
+pub use monotonic::Monotonic;
 pub use options::{Case, Options, Size};
 pub use source::ByteSource;
 #[cfg(feature = "getrandom")]
