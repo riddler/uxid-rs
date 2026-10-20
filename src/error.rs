@@ -41,8 +41,8 @@ pub enum Error {
     /// name.
     RandWithMonotonic,
     /// A [`Monotonic`](crate::Monotonic) generator asked for with a random
-    /// width of 0 bytes (a standard `xs`, or an explicit `rand_size` of 0),
-    /// which leaves no random field to step. The code is
+    /// width of 0 bytes (an `xs` with an explicit standard time, or an
+    /// explicit `rand_size` of 0), which leaves no random field to step. The code is
     /// `empty_rand_with_monotonic`, this crate's own: the wire format's
     /// generation errors name no such refusal.
     EmptyRandWithMonotonic,

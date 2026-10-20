@@ -253,21 +253,56 @@ fn invalid_generate_rand_with_monotonic_is_refused() {
 
 // Sabotage: dropping the zero-width check turns this red.
 #[test]
-fn a_generator_with_no_random_field_is_refused() {
+fn an_explicit_standard_xs_or_a_zero_width_is_refused() {
     for options in [
-        Options::new().size(Size::Xs),
+        Options::new().size(Size::Xs).compact_time(false),
         Options::new().size(Size::M).rand_size(0),
+        Options::new().size(Size::Xs).rand_size(0),
     ] {
         let error = Monotonic::new(&options).err();
-        assert_eq!(error, Some(Error::EmptyRandWithMonotonic));
+        assert_eq!(error, Some(Error::EmptyRandWithMonotonic), "{options:?}");
     }
     assert_eq!(
         Error::EmptyRandWithMonotonic.code(),
         "empty_rand_with_monotonic"
     );
-    let mut xs = Monotonic::new(&Options::new().size(Size::Xs).rand_size(1)).unwrap();
+    // An explicit standard xs with a random width keeps standard time.
+    let options = Options::new()
+        .size(Size::Xs)
+        .compact_time(false)
+        .rand_size(1);
+    let mut xs = Monotonic::new(&options).unwrap();
     let id = xs.generate_with(&mut Bytes(vec![vec![0x00]]), T).unwrap();
     assert_eq!(id, "01hf7yat0000");
+}
+
+// Sabotage: defaulting a monotonic xs to standard time turns this red.
+#[test]
+fn a_monotonic_xs_defaults_to_compact_time() {
+    let built = Monotonic::new(&Options::new().prefix("usr").size(Size::Xs));
+    assert_eq!(built.as_ref().err(), None);
+    let mut xs = built.unwrap();
+    let mut source = Replay::new(1, &[Draw::Seed(250), Draw::Step(5)]);
+    assert_eq!(xs.generate_with(&mut source, T).unwrap(), "usr_hf7yat00z2");
+    assert_eq!(xs.generate_with(&mut source, T).unwrap(), "usr_hf7yat00z7");
+
+    // With an explicit random width too, as the reference does.
+    let options = Options::new().size(Size::Xs).rand_size(2);
+    let mut wide = Monotonic::new(&options).unwrap();
+    let id = wide
+        .generate_with(&mut Replay::new(2, &[Draw::Seed(0x0123)]), T)
+        .unwrap();
+    assert_eq!(id, "hf7yat0004h1");
+}
+
+// Sabotage: turning compact time on for an unset xs in generate_with turns this red.
+#[test]
+fn generate_with_still_reads_an_unset_compact_time_as_standard() {
+    let options = Options::new().size(Size::Xs).time(T);
+    assert_eq!(
+        generate_with(&options, &mut Bytes(vec![vec![0x00]]), 0).unwrap(),
+        "01hf7yat00"
+    );
 }
 
 // Sabotage: moving the random width cap to 9 or to 11 bytes turns this red.

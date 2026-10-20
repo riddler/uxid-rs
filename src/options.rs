@@ -111,7 +111,9 @@ pub struct Options<'a> {
     pub(crate) prefix: &'a str,
     pub(crate) size: Size,
     pub(crate) rand_size: Option<usize>,
-    pub(crate) compact_time: bool,
+    /// `None` until [`Options::compact_time`] is called: `generate_with`
+    /// reads it as `false`, and a monotonic `xs` as `true`.
+    pub(crate) compact_time: Option<bool>,
     pub(crate) case: Case,
     pub(crate) delimiter: &'a str,
     pub(crate) time: Option<u64>,
@@ -127,6 +129,11 @@ impl Default for Options<'_> {
 }
 
 impl<'a> Options<'a> {
+    /// Whether a time-based id uses compact time: unset reads as `false`.
+    pub(crate) const fn compact(&self) -> bool {
+        matches!(self.compact_time, Some(true))
+    }
+
     /// The default options: no prefix, size `xl`, the size's random width,
     /// standard time, lower case, the delimiter `_`, the current time and
     /// random bytes from the byte source, and a time-based body (no `from`).
@@ -136,7 +143,7 @@ impl<'a> Options<'a> {
             prefix: "",
             size: Size::Xl,
             rand_size: None,
-            compact_time: false,
+            compact_time: None,
             case: Case::Lower,
             delimiter: "_",
             time: None,
@@ -179,10 +186,13 @@ impl<'a> Options<'a> {
     /// in 2039, is [`Error::CompactTimeOutOfRange`]. A time above 2^48 - 1
     /// is [`Error::TimeOutOfRange`] here too, as in standard time: that is
     /// this crate's answer, which the conformance corpus does not fix.
-    /// Defaults to `false`.
+    /// Defaults to `false`, except for a [`Monotonic`](crate::Monotonic)
+    /// generator at size `xs`, where it defaults to `true` (a standard `xs`
+    /// has no random field to step). Two options that differ only in
+    /// whether this was set to `false` or left unset are not equal.
     #[must_use]
     pub const fn compact_time(mut self, compact_time: bool) -> Self {
-        self.compact_time = compact_time;
+        self.compact_time = Some(compact_time);
         self
     }
 
