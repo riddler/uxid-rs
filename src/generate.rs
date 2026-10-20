@@ -78,13 +78,13 @@ where
         return Err(Error::TimeOutOfRange);
     }
     let compact_low = time % (1 << 40);
-    if options.compact_time && compact_low >> 35 == MARKER {
+    if options.compact() && compact_low >> 35 == MARKER {
         return Err(Error::CompactTimeOutOfRange);
     }
     let width = match options.rand_size {
         Some(width) if width > MAX_RAND_BYTES => return Err(Error::RandSizeTooLarge),
         Some(width) => width,
-        None => options.size.rand_bytes(options.compact_time),
+        None => options.size.rand_bytes(options.compact()),
     };
 
     let mut drawn = [0u8; MAX_RAND_BYTES];
@@ -102,7 +102,7 @@ where
 
     let mut id = String::with_capacity(options.prefix.len() + delimiter.len() + 26);
     push_prefix(&mut id, options.prefix, delimiter);
-    if options.compact_time {
+    if options.compact() {
         base32::push_integer(&mut id, compact_low, 8, options.case);
     } else {
         base32::push_integer(&mut id, time, 10, options.case);

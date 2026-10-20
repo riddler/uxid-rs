@@ -5,7 +5,7 @@ use alloc::string::String;
 
 use crate::base32;
 use crate::generate::{MARKER, MAX_RAND_BYTES, MAX_TIME, push_prefix};
-use crate::{ByteSource, Case, Error, Options};
+use crate::{ByteSource, Case, Error, Options, Size};
 
 /// A monotonic generator: the ids it makes increase strictly, in byte order
 /// as in time order, also when several fall in one millisecond and when the
@@ -90,20 +90,23 @@ impl Monotonic {
     /// increase, stepping within that millisecond and moving past it on
     /// overflow.
     ///
-    /// The random width is the size's, or the explicit
-    /// [`rand_size`](Options::rand_size), and must be at least one byte: a
-    /// standard `xs` has no random field, so a monotonic `xs` asks for
-    /// [`compact_time`](Options::compact_time), whose `xs` field is one
-    /// byte. An explicit `rand_size` on a standard `xs` is taken as
-    /// [`generate_with`](crate::generate_with) takes it: the body has the same
-    /// layout, but a length a decoder reads as another size.
+    /// One default differs: at size `xs`, compact time is on unless
+    /// [`compact_time`](Options::compact_time) was called, because a standard
+    /// `xs` has no random field to step; a compact `xs` has a one-byte field.
+    /// This holds with an explicit [`rand_size`](Options::rand_size) too.
+    /// The random width is the size's, or the explicit `rand_size`, and must
+    /// be at least one byte, so an `xs` with `compact_time(false)` and no
+    /// `rand_size` is refused. An explicit `rand_size` on a standard `xs` is
+    /// taken as [`generate_with`](crate::generate_with) takes it: the body has
+    /// the same layout, but a length a decoder reads as another size.
     ///
     /// ```
     /// use uxid::{Error, Monotonic, Options, Size};
     ///
     /// let xs = Options::new().prefix("usr").size(Size::Xs);
-    /// assert_eq!(Monotonic::new(&xs).err(), Some(Error::EmptyRandWithMonotonic));
-    /// assert!(Monotonic::new(&xs.compact_time(true)).is_ok());
+    /// assert!(Monotonic::new(&xs).is_ok());
+    /// let standard = xs.compact_time(false);
+    /// assert_eq!(Monotonic::new(&standard).err(), Some(Error::EmptyRandWithMonotonic));
     /// ```
     ///
     /// # Errors
@@ -114,7 +117,8 @@ impl Monotonic {
     /// - [`Error::RandWithMonotonic`] for fixed [`Options::rand`] bytes: the
     ///   generator chooses the random field.
     /// - [`Error::RandSizeTooLarge`] for a random width above 10 bytes.
-    /// - [`Error::EmptyRandWithMonotonic`] for a random width of 0 bytes.
+    /// - [`Error::EmptyRandWithMonotonic`] for a random width of 0 bytes: an
+    ///   `xs` with `compact_time(false)`, or `rand_size(0)`.
     /// - [`Error::TimeOutOfRange`] for a time above 2^48 - 1.
     pub fn new(options: &Options<'_>) -> Result<Self, Error> {
         if options.delimiter.is_empty() {
@@ -126,10 +130,13 @@ impl Monotonic {
         if options.rand.is_some() {
             return Err(Error::RandWithMonotonic);
         }
+        let compact_time = options
+            .compact_time
+            .unwrap_or(matches!(options.size, Size::Xs));
         let width = match options.rand_size {
             Some(width) if width > MAX_RAND_BYTES => return Err(Error::RandSizeTooLarge),
             Some(width) => width,
-            None => options.size.rand_bytes(options.compact_time),
+            None => options.size.rand_bytes(compact_time),
         };
         if width == 0 {
             return Err(Error::EmptyRandWithMonotonic);
@@ -141,7 +148,7 @@ impl Monotonic {
             prefix: String::from(options.prefix),
             delimiter: String::from(options.delimiter),
             case: options.case,
-            compact_time: options.compact_time,
+            compact_time,
             width,
             time: options.time,
             last: None,
