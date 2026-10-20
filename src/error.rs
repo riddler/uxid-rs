@@ -25,6 +25,10 @@ pub enum Error {
     /// An explicit random width above 10 bytes. The code is
     /// `rand_size_too_large`, a corpus name.
     RandSizeTooLarge,
+    /// Fixed random bytes asked for with a deterministic body
+    /// ([`Options::from`](crate::Options::from)), which has no random field.
+    /// The code is `rand_with_from`, a corpus name.
+    RandWithFrom,
     /// A time above 2^48 - 1 milliseconds, the latest a time field holds, or
     /// a system clock reading before the Unix epoch. The code is
     /// `time_out_of_range`.
@@ -52,6 +56,7 @@ impl Error {
             Self::CompactTimeOutOfRange => "compact_time_out_of_range",
             Self::RandWidthMismatch => "rand_width_mismatch",
             Self::RandSizeTooLarge => "rand_size_too_large",
+            Self::RandWithFrom => "rand_with_from",
             Self::TimeOutOfRange => "time_out_of_range",
             Self::EmptyDelimiter => "empty_delimiter",
             Self::UnknownSize => "unknown_size",
@@ -70,6 +75,9 @@ impl fmt::Display for Error {
                 "the fixed random bytes are not the random width of this request"
             }
             Self::RandSizeTooLarge => "the random width is above 10 bytes",
+            Self::RandWithFrom => {
+                "fixed random bytes cannot be used with from: a deterministic id has no random field"
+            }
             Self::TimeOutOfRange => {
                 "the time is outside 0 to 2^48 - 1 milliseconds since the Unix epoch"
             }

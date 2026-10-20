@@ -48,9 +48,32 @@ pub(crate) fn push_bytes(out: &mut String, bytes: &[u8], case: Case) {
     }
 }
 
+/// Appends the first `count` 5-bit groups of `bytes`, most significant bit
+/// first, with no short group: the caller asks for at most `8 x bytes.len()`
+/// bits, and any bits after the last group are left out.
+pub(crate) fn push_leading_bits(out: &mut String, bytes: &[u8], count: u32, case: Case) {
+    let mut buffer: u16 = 0;
+    let mut bits: u32 = 0;
+    let mut written: u32 = 0;
+    for &byte in bytes {
+        if written == count {
+            break;
+        }
+        buffer = (buffer << 8) | u16::from(byte);
+        bits += 8;
+        while bits >= 5 && written < count {
+            bits -= 5;
+            let group = ((buffer >> bits) & 31) as u8;
+            out.push(symbol(group, case));
+            written += 1;
+        }
+        buffer &= (1 << bits) - 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{push_bytes, push_integer};
+    use super::{push_bytes, push_integer, push_leading_bits};
     use crate::Case;
     use alloc::string::String;
 
@@ -75,5 +98,18 @@ mod tests {
         let mut out = String::new();
         push_bytes(&mut out, &[0xff, 0xff], Case::Lower);
         assert_eq!(out, "zzz1");
+    }
+
+    // Sabotage: writing the bits after the last whole group as a short group turns this red.
+    #[test]
+    fn leading_bits_stop_at_the_count_with_no_short_group() {
+        // 0b00001_00010_00011_0 ...: three whole groups, then the rest is left out.
+        let bytes = [0b0000_1000, 0b1000_0110, 0xff];
+        let mut out = String::new();
+        push_leading_bits(&mut out, &bytes, 3, Case::Lower);
+        assert_eq!(out, "123");
+        let mut upper = String::new();
+        push_leading_bits(&mut upper, &[0xff; 4], 6, Case::Upper);
+        assert_eq!(upper, "ZZZZZZ");
     }
 }

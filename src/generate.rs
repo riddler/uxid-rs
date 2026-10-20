@@ -1,9 +1,10 @@
-//! Time-based id generation: a time field followed by a random field, under
-//! an optional prefix.
+//! Id generation under an optional prefix: a time field followed by a random
+//! field, or, given `from`, a deterministic body.
 
 use alloc::string::String;
 
 use crate::base32;
+use crate::deterministic;
 use crate::{ByteSource, Error, Options};
 
 /// The latest time a time field holds: 2^48 - 1 milliseconds.
@@ -15,7 +16,9 @@ const MARKER: u64 = 31;
 
 /// Generates a time-based id from `options`, taking random bytes from
 /// `source` and the time from `now` (milliseconds since the Unix epoch) when
-/// the options set none.
+/// the options set none; or, when the options set
+/// [`from`](Options::from), the deterministic id of that string, for which
+/// `source` is never called and `now` is not used.
 ///
 /// This form needs no feature: it reads no clock and no platform source, so
 /// it builds under `no_std`. `generate`, behind the `std` and `getrandom`
@@ -46,6 +49,7 @@ const MARKER: u64 = 31;
 /// # Errors
 ///
 /// - [`Error::EmptyDelimiter`] for an empty delimiter.
+/// - [`Error::RandWithFrom`] for fixed random bytes with `from`.
 /// - [`Error::TimeOutOfRange`] for a time (or `now`) above 2^48 - 1.
 /// - [`Error::CompactTimeOutOfRange`] for a compact time whose first
 ///   character would be the deterministic marker.
@@ -59,6 +63,15 @@ where
     let delimiter = options.delimiter;
     if delimiter.is_empty() {
         return Err(Error::EmptyDelimiter);
+    }
+    if let Some(from) = options.from {
+        if options.rand.is_some() {
+            return Err(Error::RandWithFrom);
+        }
+        let mut id = String::with_capacity(options.prefix.len() + delimiter.len() + 26);
+        push_prefix(&mut id, options.prefix, delimiter);
+        deterministic::push_body(&mut id, options.prefix, from, options.size, options.case);
+        return Ok(id);
     }
     let time = options.time.unwrap_or(now);
     if time > MAX_TIME {
@@ -88,10 +101,7 @@ where
     };
 
     let mut id = String::with_capacity(options.prefix.len() + delimiter.len() + 26);
-    if !options.prefix.is_empty() {
-        id.push_str(options.prefix);
-        id.push_str(delimiter);
-    }
+    push_prefix(&mut id, options.prefix, delimiter);
     if options.compact_time {
         base32::push_integer(&mut id, compact_low, 8, options.case);
     } else {
@@ -101,10 +111,20 @@ where
     Ok(id)
 }
 
+/// Appends the prefix and the delimiter, or nothing for no prefix.
+fn push_prefix(id: &mut String, prefix: &str, delimiter: &str) {
+    if !prefix.is_empty() {
+        id.push_str(prefix);
+        id.push_str(delimiter);
+    }
+}
+
 /// Generates a time-based id from `options`, with random bytes from the
 /// platform's secure source ([`GetrandomSource`](crate::GetrandomSource))
 /// and the time from [`now_millis`](crate::now_millis) when the options set
-/// none. Behind the `std` and `getrandom` features, both on by default.
+/// none; or, when the options set [`from`](Options::from), the
+/// deterministic id of that string, reading neither. Behind the `std` and
+/// `getrandom` features, both on by default.
 ///
 /// ```
 /// use uxid::{Options, Size};
@@ -121,9 +141,10 @@ where
 /// the Unix epoch.
 #[cfg(all(feature = "std", feature = "getrandom"))]
 pub fn generate(options: &Options<'_>) -> Result<String, Error> {
-    let now = match options.time {
-        Some(_) => 0,
-        None => crate::now_millis()?,
+    let now = if options.from.is_some() || options.time.is_some() {
+        0
+    } else {
+        crate::now_millis()?
     };
     generate_with(options, &mut crate::GetrandomSource, now)
 }

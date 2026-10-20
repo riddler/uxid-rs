@@ -6,7 +6,9 @@ use core::str::FromStr;
 use crate::Error;
 
 /// An id's size, which fixes the random field's width (and so the body
-/// length) for standard and compact time.
+/// length) for standard and compact time. For a deterministic id
+/// ([`Options::from`]) it fixes the number of hash characters instead, one
+/// less than the standard body length.
 ///
 /// | Size | Random bytes, standard | Random bytes, compact | Body length, standard | Body length, compact |
 /// |------|------|------|------|------|
@@ -114,6 +116,7 @@ pub struct Options<'a> {
     pub(crate) delimiter: &'a str,
     pub(crate) time: Option<u64>,
     pub(crate) rand: Option<&'a [u8]>,
+    pub(crate) from: Option<&'a str>,
 }
 
 impl Default for Options<'_> {
@@ -126,7 +129,7 @@ impl Default for Options<'_> {
 impl<'a> Options<'a> {
     /// The default options: no prefix, size `xl`, the size's random width,
     /// standard time, lower case, the delimiter `_`, the current time and
-    /// random bytes from the byte source.
+    /// random bytes from the byte source, and a time-based body (no `from`).
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -138,6 +141,7 @@ impl<'a> Options<'a> {
             delimiter: "_",
             time: None,
             rand: None,
+            from: None,
         }
     }
 
@@ -210,7 +214,8 @@ impl<'a> Options<'a> {
 
     /// Fixed random field bytes, exactly the random width of the request
     /// (any other count is [`Error::RandWidthMismatch`]); the byte source is
-    /// then not called.
+    /// then not called. With [`from`](Self::from) they are
+    /// [`Error::RandWithFrom`].
     ///
     /// This exists for reproducible ids, such as test vectors, and is never a
     /// source of randomness: an id built from fixed bytes is exactly as
@@ -218,6 +223,37 @@ impl<'a> Options<'a> {
     #[must_use]
     pub const fn rand(mut self, bytes: &'a [u8]) -> Self {
         self.rand = Some(bytes);
+        self
+    }
+
+    /// A string to derive a deterministic id from, in place of a time-based
+    /// one: the same prefix, `from` and size always give the same id.
+    ///
+    /// The body is the marker `z` (`Z` in upper case) followed by the first
+    /// characters of a SHA-256 digest of the prefix, a zero byte, `from` as
+    /// UTF-8, a zero byte and one byte holding the number of hash
+    /// characters; it has the size's standard body length. With `from`, the
+    /// options `time`, `compact_time` and `rand_size` are not read, the byte
+    /// source is not called and `now` is not used; fixed [`rand`](Self::rand)
+    /// bytes are [`Error::RandWithFrom`].
+    ///
+    /// Such an id is a name, not a secret: anyone who can guess `from` can
+    /// compute it.
+    ///
+    /// ```
+    /// use uxid::{Error, Options, Size, generate_with};
+    ///
+    /// # struct NoSource;
+    /// # impl uxid::ByteSource for NoSource {
+    /// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), Error> { unreachable!() }
+    /// # }
+    /// let options = Options::new().prefix("cus").size(Size::S).from("acme-corp");
+    /// assert_eq!(generate_with(&options, &mut NoSource, 0)?, "cus_zt9vnyfd85bff0");
+    /// # Ok::<(), Error>(())
+    /// ```
+    #[must_use]
+    pub const fn from(mut self, from: &'a str) -> Self {
+        self.from = Some(from);
         self
     }
 }
