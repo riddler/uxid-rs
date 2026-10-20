@@ -95,11 +95,11 @@ alone (`uxid = "1"`), so a prep inside one major leaves it as it is. An agent or
 `cargo publish`: the release workflow (`.github/workflows/release.yml`, the
 file the release publishes from) publishes on that tag push, and a failed
 workflow is re-run from its Actions page, never worked round by a local
-publish. That workflow arrives with a later change; until it is on `main`,
-nothing publishes this crate. Merging the prep follows
-this file's merge row, and nothing else this file reserves for the operator
-changes. A prep is cut only on a green full gate, which includes the
-conformance corpus check.
+publish. crates.io accepts that workflow's publish only once the crate's
+settings on crates.io name this repository and that workflow file as its
+trusted publisher. Merging the prep follows this file's merge row, and
+nothing else this file reserves for the operator changes. A prep is cut only
+on a green full gate, which includes the conformance corpus check.
 
 This repository keeps no decision records (`docs/adr`). A release or gating
 decision is recorded here, in the authority table and the Release preps
@@ -107,9 +107,8 @@ paragraph, and in the header of the workflow it governs; a change a user of
 the API could notice is a changelog fragment (Conventions, below). The ID
 format itself is not decided here: it is uxid-ex's wire-format spec,
 `guides/wire-format.md` in https://github.com/riddler/uxid-ex, read at the
-tag the vendored corpus names (`conformance/SOURCE.json`, once the corpus is
-vendored). That this repository keeps no decision records was ruled by the
-operator, 2026-10-18; a future API decision may start a `docs/adr` directory.
+tag the vendored corpus names (`conformance/SOURCE.json`). That this
+repository keeps no decision records was ruled by the operator, 2026-10-18; a future API decision may start a `docs/adr` directory.
 
 Widening this section is a decision for the operator to make and record here.
 An agent may draft the change; it does not adopt it.
@@ -134,12 +133,11 @@ reference `uxid` and checked against its conformance corpus. It covers
 generation (random, deterministic and monotonic), decoding and the validity
 checks; it is `no_std`-capable with `alloc`, takes its random bytes from the
 platform CSPRNG through `getrandom` by default, and builds on Rust 1.85 or
-later. The 2020 code on `main` (a binary with no library, its `Cargo.toml`,
-`Cargo.lock` and the files beside them) is being replaced by that rewrite.
-The library, its gate tasks and the vendored conformance corpus are on
-`main`; CI and the release workflow arrive with later changes, and until they
-do, the sentences in this file about them describe the target, not the
-current tree.
+later. The rewrite has replaced the 2020 code (a binary with no library,
+with its own `Cargo.toml`, `Cargo.lock` and the files beside them): the
+library, its gate tasks, the vendored conformance corpus, CI
+(`.github/workflows/ci.yml`) and the release workflow
+(`.github/workflows/release.yml`) are what this tree holds.
 
 - **The crate is `uxid`.** Version 1.0.0 replaces the 2020 0.0.1 placeholder
   on crates.io under the same crate name: a new crate in substance, not an
@@ -152,13 +150,14 @@ current tree.
   against uxid-ex with its evidence, never skipped or worked round here. An
   answer the corpus does not fix follows uxid-ex's spec at that tag.
 
-`README.md` is the user reference; `CHANGELOG.md`, which the rewrite adds,
-records each release.
+`README.md` is the user reference; `CHANGELOG.md` records each release,
+assembled at the release prep from the fragments in `changelog.d/` (its
+`README.md` states the rule).
 
 ## Build & Test
 
-The gate tasks live in `mise.toml`, which the rewrite adds; on a tree without
-it these commands do not run yet.
+The gate tasks live in `mise.toml`, and CI runs the same full gate on every
+push to `main` and every pull request (`.github/workflows/ci.yml`).
 
 ```bash
 mise install            # the Rust toolchain and cargo tools mise.toml pins

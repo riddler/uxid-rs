@@ -30,9 +30,14 @@ run = [
 ]
 
 [tasks."gate:doc"]
-description = "Build the docs with rustdoc warnings denied"
+description = "Build the docs with rustdoc warnings denied, with every feature and with none"
 env = { RUSTDOCFLAGS = "-D warnings" }
-run = "cargo doc --no-deps --all-features"
+# Twice: an intra-doc link to an item behind a feature resolves with every
+# feature on and breaks without it, so only the second build catches it.
+run = [
+  "cargo doc --no-deps --all-features",
+  "cargo doc --no-deps --no-default-features",
+]
 
 [tasks."gate:coverage"]
 description = "Line coverage with every feature, failing under 90 percent"
