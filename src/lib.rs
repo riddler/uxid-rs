@@ -91,6 +91,13 @@ pub use source::ByteSource;
 #[cfg(feature = "getrandom")]
 pub use source::GetrandomSource;
 
+/// The README's Rust examples, collected only by `cargo test --doc` so that
+/// they compile and run as doctests. They call `generate` and `decode`, so
+/// they run when the `std` and `getrandom` features are both on.
+#[cfg(all(doctest, feature = "std", feature = "getrandom"))]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
+
 #[cfg(test)]
 mod tests {
     // Sabotage: with `extern crate alloc;` deleted, this test no longer compiles.

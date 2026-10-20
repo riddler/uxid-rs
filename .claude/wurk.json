@@ -40,7 +40,7 @@
       "rustfmt.toml",
       "clippy.toml"
     ],
-    "also_gated_paths": ["conformance/"],
+    "also_gated_paths": ["conformance/", "README.md"],
     "moving_files": ["mise.toml", "deny.toml", "rustfmt.toml", "clippy.toml"],
     "sabotage": {
       "test_roots": ["tests/", "src/"],

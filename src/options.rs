@@ -79,6 +79,20 @@ impl FromStr for Size {
 
 /// The letter case of an id's body. Case never applies to the prefix, and an
 /// upper-case body and its lower-case spelling are the same id.
+///
+/// ```
+/// use uxid::{Case, Options, Size, generate_with};
+///
+/// # struct NoSource;
+/// # impl uxid::ByteSource for NoSource {
+/// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), uxid::Error> { unreachable!() }
+/// # }
+/// let options = Options::new().prefix("usr").size(Size::Xs).time(1_700_000_000_000);
+/// let upper = generate_with(&options.clone().case(Case::Upper), &mut NoSource, 0)?;
+/// assert_eq!(upper, "usr_01HF7YAT00");
+/// assert_eq!(uxid::decode_with(&upper, "_", 0), uxid::decode_with("usr_01hf7yat00", "_", 0));
+/// # Ok::<(), uxid::Error>(())
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Case {
     /// Lower case, the default.
@@ -137,6 +151,18 @@ impl<'a> Options<'a> {
     /// The default options: no prefix, size `xl`, the size's random width,
     /// standard time, lower case, the delimiter `_`, the current time and
     /// random bytes from the byte source, and a time-based body (no `from`).
+    ///
+    /// ```
+    /// use uxid::{Options, generate_with};
+    ///
+    /// # struct Repeat;
+    /// # impl uxid::ByteSource for Repeat {
+    /// #     fn fill(&mut self, buf: &mut [u8]) -> Result<(), uxid::Error> { buf.fill(0); Ok(()) }
+    /// # }
+    /// let id = generate_with(&Options::new(), &mut Repeat, 1_700_000_000_000)?;
+    /// assert_eq!(id, "01hf7yat000000000000000000");
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -155,6 +181,19 @@ impl<'a> Options<'a> {
     /// The resource prefix, written before the delimiter exactly as given
     /// (case never applies to it). It may contain the delimiter. An empty
     /// string is no prefix, the default: the id is the bare body.
+    ///
+    /// ```
+    /// use uxid::{Options, Size, generate_with};
+    ///
+    /// # struct NoSource;
+    /// # impl uxid::ByteSource for NoSource {
+    /// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), uxid::Error> { unreachable!() }
+    /// # }
+    /// let options = Options::new().size(Size::Xs).time(1_700_000_000_000);
+    /// assert_eq!(generate_with(&options.clone().prefix("usr"), &mut NoSource, 0)?, "usr_01hf7yat00");
+    /// assert_eq!(generate_with(&options.prefix(""), &mut NoSource, 0)?, "01hf7yat00");
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub const fn prefix(mut self, prefix: &'a str) -> Self {
         self.prefix = prefix;
@@ -163,6 +202,19 @@ impl<'a> Options<'a> {
 
     /// The size, which fixes the random field's width. Defaults to
     /// [`Size::Xl`].
+    ///
+    /// ```
+    /// use uxid::{Options, Size, generate_with};
+    ///
+    /// # struct Repeat;
+    /// # impl uxid::ByteSource for Repeat {
+    /// #     fn fill(&mut self, buf: &mut [u8]) -> Result<(), uxid::Error> { buf.fill(0); Ok(()) }
+    /// # }
+    /// let options = Options::new().prefix("cus").size(Size::M);
+    /// let id = generate_with(&options, &mut Repeat, 1_700_000_000_000)?;
+    /// assert_eq!(id, "cus_01hf7yat0000000000");
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub const fn size(mut self, size: Size) -> Self {
         self.size = size;
@@ -173,6 +225,20 @@ impl<'a> Options<'a> {
     /// the size's width; above 10 is [`Error::RandSizeTooLarge`]. A body of a
     /// width the size table does not list has the same layout, but its
     /// length is one a decoder refuses.
+    ///
+    /// ```
+    /// use uxid::{Error, Options, generate_with};
+    ///
+    /// # struct NoSource;
+    /// # impl uxid::ByteSource for NoSource {
+    /// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), uxid::Error> { unreachable!() }
+    /// # }
+    /// let options = Options::new().prefix("cus").time(1_700_000_000_000);
+    /// let id = generate_with(&options.clone().rand_size(1).rand(&[0xff]), &mut NoSource, 0)?;
+    /// assert_eq!(id, "cus_01hf7yat00z7");
+    /// assert_eq!(generate_with(&options.rand_size(11), &mut NoSource, 0), Err(Error::RandSizeTooLarge));
+    /// # Ok::<(), Error>(())
+    /// ```
     #[must_use]
     pub const fn rand_size(mut self, bytes: usize) -> Self {
         self.rand_size = Some(bytes);
@@ -190,6 +256,23 @@ impl<'a> Options<'a> {
     /// generator at size `xs`, where it defaults to `true` (a standard `xs`
     /// has no random field to step). Two options that differ only in
     /// whether this was set to `false` or left unset are not equal.
+    ///
+    /// ```
+    /// use uxid::{Options, Size, generate_with};
+    ///
+    /// # struct NoSource;
+    /// # impl uxid::ByteSource for NoSource {
+    /// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), uxid::Error> { unreachable!() }
+    /// # }
+    /// let options = Options::new()
+    ///     .prefix("usr")
+    ///     .size(Size::S)
+    ///     .compact_time(true)
+    ///     .time(1_700_000_000_000)
+    ///     .rand(&[0x01, 0x23, 0x45]);
+    /// assert_eq!(generate_with(&options, &mut NoSource, 0)?, "usr_hf7yat0004hm5");
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub const fn compact_time(mut self, compact_time: bool) -> Self {
         self.compact_time = Some(compact_time);
@@ -197,6 +280,18 @@ impl<'a> Options<'a> {
     }
 
     /// The letter case of the body. Defaults to [`Case::Lower`].
+    ///
+    /// ```
+    /// use uxid::{Case, Options, Size, generate_with};
+    ///
+    /// # struct NoSource;
+    /// # impl uxid::ByteSource for NoSource {
+    /// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), uxid::Error> { unreachable!() }
+    /// # }
+    /// let options = Options::new().prefix("usr").size(Size::Xs).time(1_700_000_000_000);
+    /// assert_eq!(generate_with(&options.case(Case::Upper), &mut NoSource, 0)?, "usr_01HF7YAT00");
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub const fn case(mut self, case: Case) -> Self {
         self.case = case;
@@ -206,6 +301,19 @@ impl<'a> Options<'a> {
     /// The string between the prefix and the body, written only when there
     /// is a prefix. Defaults to `_`; an empty delimiter is
     /// [`Error::EmptyDelimiter`].
+    ///
+    /// ```
+    /// use uxid::{Error, Options, Size, generate_with};
+    ///
+    /// # struct NoSource;
+    /// # impl uxid::ByteSource for NoSource {
+    /// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), uxid::Error> { unreachable!() }
+    /// # }
+    /// let options = Options::new().prefix("usr").size(Size::Xs).time(1_700_000_000_000);
+    /// assert_eq!(generate_with(&options.clone().delimiter("-"), &mut NoSource, 0)?, "usr-01hf7yat00");
+    /// assert_eq!(generate_with(&options.delimiter(""), &mut NoSource, 0), Err(Error::EmptyDelimiter));
+    /// # Ok::<(), Error>(())
+    /// ```
     #[must_use]
     pub const fn delimiter(mut self, delimiter: &'a str) -> Self {
         self.delimiter = delimiter;
@@ -216,6 +324,21 @@ impl<'a> Options<'a> {
     /// above that is [`Error::TimeOutOfRange`]. Defaults to the current
     /// time: the system clock for `generate`, the `now` argument for
     /// [`generate_with`](crate::generate_with).
+    ///
+    /// ```
+    /// use uxid::{Error, Options, Size, generate_with};
+    ///
+    /// # struct NoSource;
+    /// # impl uxid::ByteSource for NoSource {
+    /// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), uxid::Error> { unreachable!() }
+    /// # }
+    /// let options = Options::new().prefix("usr").size(Size::Xs);
+    /// // The option wins over `now`.
+    /// let id = generate_with(&options.clone().time(1_700_000_000_000), &mut NoSource, 0)?;
+    /// assert_eq!(id, "usr_01hf7yat00");
+    /// assert_eq!(generate_with(&options.time(1 << 48), &mut NoSource, 0), Err(Error::TimeOutOfRange));
+    /// # Ok::<(), Error>(())
+    /// ```
     #[must_use]
     pub const fn time(mut self, millis: u64) -> Self {
         self.time = Some(millis);
@@ -230,6 +353,20 @@ impl<'a> Options<'a> {
     /// This exists for reproducible ids, such as test vectors, and is never a
     /// source of randomness: an id built from fixed bytes is exactly as
     /// guessable as those bytes. Leave it unset for real ids.
+    ///
+    /// ```
+    /// use uxid::{Error, Options, Size, generate_with};
+    ///
+    /// # struct NoSource;
+    /// # impl uxid::ByteSource for NoSource {
+    /// #     fn fill(&mut self, _: &mut [u8]) -> Result<(), uxid::Error> { unreachable!() }
+    /// # }
+    /// let options = Options::new().prefix("cus").size(Size::S).time(1_700_000_000_000);
+    /// let id = generate_with(&options.clone().rand(&[0x01, 0x23]), &mut NoSource, 0)?;
+    /// assert_eq!(id, "cus_01hf7yat0004h1");
+    /// assert_eq!(generate_with(&options.rand(&[0x01]), &mut NoSource, 0), Err(Error::RandWidthMismatch));
+    /// # Ok::<(), Error>(())
+    /// ```
     #[must_use]
     pub const fn rand(mut self, bytes: &'a [u8]) -> Self {
         self.rand = Some(bytes);

@@ -44,12 +44,26 @@ impl Decoded {
     /// Everything before the delimiter [`decode_with`] splits at, or `None`
     /// when the id has no delimiter. An id that starts with the delimiter, which no producer
     /// emits, has the prefix `Some("")`, best read as no prefix.
+    ///
+    /// ```
+    /// assert_eq!(uxid::decode_with("cus_01hf7yat0004h1", "_", 0)?.prefix(), Some("cus"));
+    /// assert_eq!(uxid::decode_with("01hf7yat0004h1", "_", 0)?.prefix(), None);
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub fn prefix(&self) -> Option<&str> {
         self.prefix.as_deref()
     }
 
     /// The size the body length gives.
+    ///
+    /// ```
+    /// use uxid::Size;
+    ///
+    /// assert_eq!(uxid::decode_with("usr_01hf7yat00", "_", 0)?.size(), Size::Xs);
+    /// assert_eq!(uxid::decode_with("cus_01hf7yat0004h1", "_", 0)?.size(), Size::S);
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub const fn size(&self) -> Size {
         self.size
@@ -58,12 +72,25 @@ impl Decoded {
     /// Whether the body length is a compact-time one (13, 21 or 24). The
     /// lengths 10 and 18 are always read as standard time, so a compact xs or
     /// compact m id decodes with this `false`.
+    ///
+    /// ```
+    /// let now = 1_700_000_000_000;
+    /// assert!(uxid::decode_with("usr_hf7yat0004hm5", "_", now)?.is_compact());
+    /// assert!(!uxid::decode_with("usr_01hf7yat0004h1", "_", now)?.is_compact());
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub const fn is_compact(&self) -> bool {
         self.compact
     }
 
     /// Whether the body starts with the deterministic marker `z` or `Z`.
+    ///
+    /// ```
+    /// assert!(uxid::decode_with("usr_zcvt7epac0t1ebcsjfyf7cwz25", "_", 0)?.is_deterministic());
+    /// assert!(!uxid::decode_with("usr_01hf7yat0004h1", "_", 0)?.is_deterministic());
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub const fn is_deterministic(&self) -> bool {
         self.deterministic
@@ -72,6 +99,15 @@ impl Decoded {
     /// The time in milliseconds since the Unix epoch, or `None` for a
     /// deterministic body, which carries none. A compact time's high bits
     /// come from the decoder's clock.
+    ///
+    /// ```
+    /// assert_eq!(
+    ///     uxid::decode_with("usr_01hf7yat0004h1", "_", 0)?.time(),
+    ///     Some(1_700_000_000_000)
+    /// );
+    /// assert_eq!(uxid::decode_with("usr_zcvt7epac0t1ebcsjfyf7cwz25", "_", 0)?.time(), None);
+    /// # Ok::<(), uxid::Error>(())
+    /// ```
     #[must_use]
     pub const fn time(&self) -> Option<u64> {
         self.time
