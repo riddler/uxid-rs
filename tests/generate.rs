@@ -498,6 +498,10 @@ fn errors_display_a_sentence_naming_the_refusal() {
 mod defaults {
     use uxid::{ByteSource, GetrandomSource, Options, Size, generate, now_millis};
 
+    /// How far the wall clock may step between two reads in a test (an NTP
+    /// correction can move it backwards) before the test calls it a failure.
+    const SLACK_MS: u64 = 10_000;
+
     /// The time field of a standard-time body, read back as milliseconds.
     fn standard_time(body: &str) -> u64 {
         body[..10].chars().fold(0, |time, c| {
@@ -516,8 +520,8 @@ mod defaults {
         assert!(id.starts_with("usr_"));
         let time = standard_time(&id[4..]);
         assert!(
-            before <= time && time <= after,
-            "{before} <= {time} <= {after}"
+            before.saturating_sub(SLACK_MS) <= time && time <= after + SLACK_MS,
+            "{before} <= {time} <= {after}, give or take {SLACK_MS} ms"
         );
 
         let full = generate(&Options::new()).unwrap();
@@ -537,8 +541,8 @@ mod defaults {
             .as_millis() as u64;
         let clock = now_millis().unwrap();
         assert!(
-            clock >= system && clock - system < 60_000,
-            "{system} {clock}"
+            clock.abs_diff(system) <= SLACK_MS,
+            "{system} {clock}, give or take {SLACK_MS} ms"
         );
     }
 
